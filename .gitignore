@@ -1,0 +1,39 @@
+__pycache__/
+*.pyc
+.env
+*.safetensors
+.vscode/
+node_modules/
+*.csv
+*.json
+*.pkl
+*.npy
+
+# Bytecode de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Archivos de entorno virtual
+.env/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+tf_env/
+
+# Archivos de configuración de entorno
+*.env
+*.env.*
+
+# Archivos de log y temporales
+*.log
+
+# Archivos de test o resultados
+test/
+
+# Configuraciones de IDEs/editors
+.vscode/
+*.sublime-workspace
