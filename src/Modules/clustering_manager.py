@@ -146,14 +146,14 @@ class ClusteringManager:
             print(f"Modelos UMAP y HDBSCAN guardados en {modelos_dir}")
             
             # Guardar embeddings etiquetados en un CSV
-            embeddings_labeled = pd.DataFrame(embeddings)
+            embeddings_labeled = pd.DataFrame(umap_embeddings)
             embeddings_labeled['label'] = hdbscan_model.labels_
-            csv_labeled_path = os.path.join(modelos_dir, "embeddings_labeled.csv")
+            csv_labeled_path = os.path.join(modelos_dir, "embeddings_labeled_random.csv")
             embeddings_labeled.to_csv(csv_labeled_path, index=False)
             print(f"Embeddings etiquetados guardados en {csv_labeled_path}")
             
             # Guardar embeddings etiquetados en un NPY
-            npy_labeled_path = os.path.join(modelos_dir, "embeddings_labeled.npy")
+            npy_labeled_path = os.path.join(modelos_dir, "embeddings_labeled_random.npy")
             np.save(npy_labeled_path, embeddings_labeled.values)
             print(f"Embeddings etiquetados guardados en {npy_labeled_path}")
             
@@ -269,16 +269,15 @@ class ClusteringManager:
             with open(os.path.join(modelos_dir, "hdbscan_bayesian.pkl"), "wb") as f:
                 pickle.dump(hdbscan_model, f)
             print(f"Modelos UMAP y HDBSCAN guardados en {modelos_dir}")
-            # Guardar embeddings etiquetados en un CSV  
             # Guardar embeddings etiquetados en un CSV
-            embeddings_labeled = pd.DataFrame(embeddings)
+            embeddings_labeled = pd.DataFrame(umap_embeddings)
             embeddings_labeled['label'] = hdbscan_model.labels_
-            csv_labeled_path = os.path.join(modelos_dir, "embeddings_labeled.csv")
+            csv_labeled_path = os.path.join(modelos_dir, "embeddings_labeled_bayesian.csv")
             embeddings_labeled.to_csv(csv_labeled_path, index=False)
             print(f"Embeddings etiquetados guardados en {csv_labeled_path}")
             
             # Guardar embeddings etiquetados en un NPY
-            npy_labeled_path = os.path.join(modelos_dir, "embeddings_labeled.npy")
+            npy_labeled_path = os.path.join(modelos_dir, "embeddings_labeled_bayesian.npy")
             np.save(npy_labeled_path, embeddings_labeled.values)
             print(f"Embeddings etiquetados guardados en {npy_labeled_path}")
             
@@ -365,14 +364,14 @@ class ClusteringManager:
             print(f"Modelos UMAP y HDBSCAN guardados en {modelos_dir} (grid search)")
             
             # Guardar embeddings etiquetados en un CSV
-            embeddings_labeled = pd.DataFrame(embeddings)
+            embeddings_labeled = pd.DataFrame(umap_embeddings)
             embeddings_labeled['label'] = hdbscan_model.labels_
-            csv_labeled_path = os.path.join(modelos_dir, "embeddings_labeled.csv")
+            csv_labeled_path = os.path.join(modelos_dir, "embeddings_labeled_grid.csv")
             embeddings_labeled.to_csv(csv_labeled_path, index=False)
             print(f"Embeddings etiquetados guardados en {csv_labeled_path}")
             
             # Guardar embeddings etiquetados en un NPY
-            npy_labeled_path = os.path.join(modelos_dir, "embeddings_labeled.npy")
+            npy_labeled_path = os.path.join(modelos_dir, "embeddings_labeled_grid.npy")
             np.save(npy_labeled_path, embeddings_labeled.values)
             print(f"Embeddings etiquetados guardados en {npy_labeled_path}")
         tiempo = time.time() - start_time

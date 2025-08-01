@@ -26,7 +26,7 @@ def main():
     args = parser.parse_args()
 
     path_test = "../test"
-    path_embeddings = f"{path_test}/embeddings/{args.modelo}/{args.modelo}_1753897318.6369922.npy"
+    path_embeddings = f"{path_test}/embeddings/{args.modelo}/{args.modelo}_1753994950.252781.npy"
     assert os.path.exists(path_embeddings), f"Embeddings no encontrados en {path_embeddings}"
 
     print(f"Cargando embeddings desde {path_embeddings} ...")

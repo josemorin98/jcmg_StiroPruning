@@ -27,8 +27,8 @@ class PredictVector:
         Retorna:
             np.ndarray: Vector embedding resultante.
         """
-        texto = entrada.astype(str).applymap(lambda x: x.replace(' ', '_')).agg(' '.join, axis=1).tolist()
-        embedding = self.manager.embed(self.model_name, [texto])[0]
+        # texto = entrada.astype(str).applymap(lambda x: x.replace(' ', '_')).agg(' '.join, axis=1).tolist()
+        embedding = self.manager.embed(self.model_name, [entrada])[0]
         return embedding
 
     def predecir_grupo(self, embedding, umap_path, cluster_model_path):
@@ -85,156 +85,78 @@ class PredictVector:
                 return True, idx
         return False, None
     
-    
-    def buscar_similares_en_grupo(self, embedding, embeddings_path, labels_path, grupo_id, top_n=10):
+    def existe_en_grupo_por_etiqueta(self, embedding, embeddings_labeled_path, grupo_id, atol=1e-6):
         """
-        Busca los top_n embeddings más similares al embedding dado, pero solo dentro del grupo especificado.
+        Verifica si el embedding de entrada existe exactamente (o casi exactamente) en el grupo especificado
+        dentro del conjunto completo de embeddings etiquetados.
 
         Parámetros:
             embedding (np.ndarray): Vector embedding de entrada.
-            embeddings_path (str): Ruta al archivo .npy con los embeddings de referencia.
-            labels_path (str): Ruta al archivo .npy o .csv con las etiquetas de grupo.
+            embeddings_labeled_path (str): Ruta al archivo .npy con todos los embeddings etiquetados.
+            grupo_id (int): Etiqueta del grupo donde buscar.
+            atol (float): Tolerancia para igualdad numérica (por defecto 1e-6).
+
+        Retorna:
+            existe (bool): True si el embedding está en el grupo, False si no.
+            idx (int o None): Índice relativo dentro del grupo donde se encontró, o None si no está.
+            idx_global (int o None): Índice global en el archivo original, o None si no está.
+        """
+        # Cargar embeddings etiquetados (.npy que incluye la columna 'label')
+        embeddings_labeled = np.load(embeddings_labeled_path)
+        
+        # Separar los embeddings de las etiquetas (asumiendo que la última columna es 'label')
+        embeddings = embeddings_labeled[:, :-1]  # Todas las columnas excepto la última
+        labels = embeddings_labeled[:, -1]       # Última columna (etiquetas)
+        
+        # Filtrar solo los embeddings del grupo especificado
+        indices_grupo = np.where(labels == grupo_id)[0]
+        if len(indices_grupo) == 0:
+            return False, None, None
+        
+        grupo_embeddings = embeddings[indices_grupo]
+        
+        # Buscar si el embedding existe en el grupo
+        for idx_relativo, emb in enumerate(grupo_embeddings):
+            if np.allclose(embedding, emb, atol=atol):
+                idx_global = indices_grupo[idx_relativo]
+                return True, idx_relativo, idx_global
+        
+        return False, None, None
+
+    def buscar_similares_en_grupo_por_etiqueta(self, embedding, embeddings_labeled_path, grupo_id, top_n=10):
+        """
+        Busca los top_n embeddings más similares al embedding dado, pero solo dentro del grupo especificado
+        del archivo de embeddings etiquetados.
+
+        Parámetros:
+            embedding (np.ndarray): Vector embedding de entrada.
+            embeddings_labeled_path (str): Ruta al archivo .npy con todos los embeddings etiquetados.
             grupo_id (int): Etiqueta del grupo a buscar.
             top_n (int): Número de vecinos más similares a retornar.
 
         Retorna:
             top_idx (np.ndarray): Índices relativos dentro del grupo de los embeddings más similares.
             similarities (np.ndarray): Valores de similitud correspondientes.
-            idx_global (np.ndarray): Índices globales en el arreglo original de embeddings.
+            idx_global (np.ndarray): Índices globales en el archivo de embeddings etiquetados.
         """
-        embeddings = np.load(embeddings_path)
-        # Cargar etiquetas (puede ser .npy o .csv)
-        if labels_path.endswith('.npy'):
-            labels = np.load(labels_path)
-        else:
-            import pandas as pd
-            labels = pd.read_csv(labels_path).values.squeeze()
+        # Cargar embeddings etiquetados (.npy que incluye la columna 'label')
+        embeddings_labeled = np.load(embeddings_labeled_path)
+        
+        # Separar los embeddings de las etiquetas (asumiendo que la última columna es 'label')
+        embeddings = embeddings_labeled[:, :-1]  # Todas las columnas excepto la última
+        labels = embeddings_labeled[:, -1]       # Última columna (etiquetas)
+        
         # Filtrar embeddings y obtener índices globales del grupo
         idx_global = np.where(labels == grupo_id)[0]
-        grupo_embeddings = embeddings[idx_global]
-        if len(grupo_embeddings) == 0:
+        if len(idx_global) == 0:
             return np.array([]), np.array([]), np.array([])
+        
+        grupo_embeddings = embeddings[idx_global]
+        
+        # Calcular similitudes coseno
         similarities = cosine_similarity([embedding], grupo_embeddings)[0]
+        
+        # Obtener los top_n más similares
         top_idx = similarities.argsort()[-top_n:][::-1]
+        
         return top_idx, similarities[top_idx], idx_global[top_idx]
-
-
-# def extraer_datos_originales_por_grupo(grupo_id, cluster_data_path, original_csv_path, output_path):
-#     """
-#     Extrae las filas originales del CSV original correspondientes a los índices del grupo predicho,
-#     las guarda en un nuevo archivo CSV y retorna el DataFrame filtrado.
-
-#     Parámetros:
-#         grupo_id (int): Etiqueta del grupo predicho.
-#         cluster_data_path (str): Ruta al CSV con los vectores y etiquetas de grupo.
-#         original_csv_path (str): Ruta al CSV original con los datos completos.
-#         output_path (str): Ruta donde se guardarán los datos originales filtrados.
-
-#     Retorna:
-#         datos_filtrados (pd.DataFrame): DataFrame con los datos originales del grupo.
-#     """
-#     # Cargar los datos de clusters y los datos originales
-#     df_clusters = pd.read_csv(cluster_data_path)
-#     df_original = pd.read_csv(original_csv_path)
-
-#     # Obtener los índices de las filas que pertenecen al grupo_id
-#     indices_grupo = df_clusters[df_clusters["KMeans_Label"] == grupo_id].index
-
-#     # Extraer las filas originales usando los índices
-#     datos_filtrados = df_original.loc[indices_grupo]
-
-#     # Guardar el resultado
-#     datos_filtrados.to_csv(output_path, index=False)
-#     print(f"Datos originales del grupo {grupo_id} guardados en '{output_path}'")
-
-#     return datos_filtrados
-
-# def predecir_grupo_y_extraer(embedding, model_path, scaler_path, data_path):
-#     """
-#     Escala el embedding, predice el grupo con KMeans y extrae los vectores similares del grupo.
-
-#     Parámetros:
-#         embedding (np.ndarray): Vector embedding de entrada.
-#         model_path (str): Ruta al modelo KMeans entrenado (pkl).
-#         scaler_path (str): Ruta al scaler entrenado (pkl).
-#         data_path (str): Ruta al archivo CSV con los vectores y etiquetas de grupo.
-
-#     Retorna:
-#         grupo (int): Etiqueta de grupo predicha.
-#         resultados (pd.DataFrame): DataFrame con los vectores del grupo predicho.
-#     """
-#     # Cargar scaler y modelo
-#     with open(scaler_path, "rb") as f:
-#         scaler = pickle.load(f)
-#     with open(model_path, "rb") as f:
-#         modelo = pickle.load(f)
-
-#     # Escalar el embedding
-#     embedding_scaled = scaler.transform([embedding])
-
-#     # Predecir el grupo
-#     grupo = modelo.predict(embedding_scaled)[0]
-
-#     # Cargar los datos y extraer los del grupo predicho
-#     df = pd.read_csv(data_path)
-#     resultados = df[df["KMeans_Label"] == grupo]
-
-#     return grupo, resultados
-
-# def generar_embedding_desde_lista(entrada, name,modelo=None):
-#     """
-#     Genera el embedding de una lista de atributos concatenando los elementos y aplicando el modelo de embeddings.
-
-#     Parámetros:
-#         entrada (list): Lista de strings o valores a convertir en embedding.
-#         modelo (objeto): Modelo de embeddings previamente cargado.
-
-#     Retorna:
-#         np.ndarray: Vector embedding resultante.
-#     """
-#     # Concatenar los elementos de la lista en un solo string, separados por espacio
-#     texto = ' '.join([str(x).replace(' ', '_') for x in entrada])
-    
-#     # Si no se pasa un modelo, aquí deberías cargarlo o lanzar un error
-#     if modelo is None:
-#         raise ValueError("Debes proporcionar un modelo de embeddings previamente cargado.")
-    
-#     # Obtener el embedding (ajusta según tu modelo)
-#     embedding = modelo.embed(name,[texto])[0]  # Por ejemplo, para USE o SentenceTransformer
-#     return embedding
-
-
-
-# if __name__ == "__main__":
-#     # Paso 1: Vector de entrada
-#     entrada = ["Tamaulipas.Tampico", "2000", "Mujeres.45_64", "1.5", "1.3"]
-
-#     # Paso 2: Cargar el modelo de embeddings
-#     from model_manager import EmbeddingModelManager
-    
-#     # Paso 2: Obtener embedding de entrada
-#     manager = EmbeddingModelManager()
-#     manager.load_model("use", "use", "https://tfhub.dev/google/universal-sentence-encoder/4")
-
-#     embedding = generar_embedding_desde_lista(entrada,"use", model=manager)
-
-#     # Paso 3: Predecir grupo y extraer todos los vectores de ese grupo
-#     grupo, resultados = predecir_grupo_y_extraer(
-#         embedding=embedding,
-#         model_path="../test/Modelos/modelo_kmeans.pkl", 
-#         scaler_path="../test/Modelos/scaler.pkl",
-#         data_path="../test/vectores_clusters.csv"
-#     )
-
-#     # Paso 4: Guardar resultados del grupo (vectores similares)
-#     resultados_path = f"../test/vectores_grupo_{grupo}.csv"
-#     resultados.to_csv(resultados_path, index=False)
-#     print(f"\nResultados guardados en '{resultados_path}'")
-
-#     # Paso 5: (Opcional) Extraer datos originales de ese grupo
-#     extraer_datos_originales_por_grupo(
-#         grupo_id=grupo,
-#         cluster_data_path="../test/vectores_clusters.csv",
-#         original_csv_path="../data/sample.csv",
-#         output_path=f"../test/vectores_grupo_{grupo}_originales.csv"
-#     ).head()
