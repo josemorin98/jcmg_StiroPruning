@@ -1,29 +1,39 @@
 import argparse
 import numpy as np
+import pandas as pd
 from Modules.predict_vector import PredictVector
+from Modules.classification_manager import ClassificationManager
 import pickle
 from sklearn.metrics.pairwise import cosine_similarity
 from Modules.model_manager import EmbeddingModelManager
 import time 
 
 def main():
-    parser = argparse.ArgumentParser(description="Predicción de grupo para un vector de entrada.")
-    # parser.add_argument("--vector", type=str, required=True, help="Vector de entrada separado por comas (ej: 0.1,0.2,0.3,...)")
-    parser.add_argument("--modelo", type=str, choices=["use", "st1", "st2", "st3"], help="Modelo de clustering a usar", default="st1")
-    parser.add_argument("--params", type=str, choices=["random", "bayesiano"], help="Modelo de clustering a usar", default="bayesiano")
+    parser = argparse.ArgumentParser(description="Predicción de grupo usando clasificación para un vector de entrada.")
+    parser.add_argument("--modelo", type=str, choices=["use", "st1", "st2", "st3"], help="Modelo de embeddings a usar", default="st1")
+    parser.add_argument("--params", type=str, choices=["random", "bayesian"], help="Tipo de parámetros de clustering usados", default="bayesian")
     parser.add_argument("--embeddings_path", type=str, default="../test/embeddings", help="Ruta al archivo .npy de embeddings")
-    parser.add_argument("--params_dir", type=str, default="../test/Modelos", help="Directorio donde están los modelos")
+    parser.add_argument("--models_dir", type=str, default="../test/Modelos", help="Directorio donde están los modelos")
+    parser.add_argument("--use_adjusted", action="store_true", help="Usar embeddings ajustados con columnas spatial, temporal e interest")
     args = parser.parse_args()
     
-    # 1. Recibe el vector y lo convierte en oración
-    print("Recibiendo vector de entrada...")
-    vector_input = ["Jalisco.Zapopan", "2021", "Hombres.Total", "0.2810551936189229","0.2810551936189229"]
+    # Determinar sufijo según si se usan embeddings ajustados
+    model_suffix = "_adjusted" if args.use_adjusted else ""
+    params_suffix = f"_{args.params}"
+    
+    print(f"Usando modelo: {args.modelo}")
+    print(f"Tipo de parámetros: {args.params}")
+    print(f"Embeddings ajustados: {args.use_adjusted}")
+    
+    # 1. Vector de entrada (mismo formato que antes)
+    print("\n=== VECTOR DE ENTRADA ===")
+    vector_input = ["Jalisco.Zapopan", "2021", "Hombres.Total", "0.2810551936189229", "0.2810551936189229"]
     print("Vector entrada:", vector_input)
-    # query = vector_input.astype(str).applymap(lambda x: x.replace(' ', '_')).agg(' '.join, axis=1).tolist()
     query_string = ' '.join([str(x).replace(' ', '_') for x in vector_input])
     print("Vector en sentencia:", query_string)
 
-   # 2. Selección del modelo de embeddings
+    # 2. Selección del modelo de embeddings
+    print("\n=== GENERACIÓN DE EMBEDDING ===")
     modelos_dict = {
         "use": ("use", "use", "https://tfhub.dev/google/universal-sentence-encoder/4"),
         "st1": ("st1", "sentence_transformer", "all-mpnet-base-v2"),
@@ -37,56 +47,111 @@ def main():
 
     # 3. Generar embedding
     embedding = predictor.generar_embedding(query_string)
-    print("Embedding generado.")
+    print("Embedding generado con dimensiones:", embedding.shape)
 
-    # exit()
-    # 4. Selección de modelos UMAP y HDBSCAN según el tipo de parámetros
-    if args.params == "random":
-        umap_path = f"{args.params_dir}_{nombre}/umap_random.pkl"
-        hdbscan_path = f"{args.params_dir}_{nombre}/hdbscan_random.pkl"
-    else:
-        umap_path = f"{args.params_dir}_{nombre}/umap_bayesian.pkl"
-        hdbscan_path = f"{args.params_dir}_{nombre}/hdbscan_bayesian.pkl"
-
-    # 5. Predicción de grupo
-    label, embedding_umap = predictor.predecir_grupo(embedding, umap_path, hdbscan_path)
-    print(f"Grupo asignado: {label}")
-    # exit()
+    # 4. Inicializar el gestor de clasificación
+    print("\n=== CLASIFICACIÓN ===")
+    classifier_manager = ClassificationManager(random_state=42)
     
-    # 6. Verificar si el embedding ya existe en el grupo
-    embeddings_labeled_path = f"{args.params_dir}_{nombre}/embeddings_labeled.npy"
+    # 5. Cargar datos de clustering para entrenar el clasificador
+    models_dir = f"{args.models_dir}_{args.modelo}{model_suffix}"
+    embeddings_path = f"../test/embeddings/{args.modelo}/{args.modelo}{model_suffix}.npy"
+    
+    print(f"Cargando datos desde: {models_dir}")
+    embeddings_data, labels = classifier_manager.load_clustering_data(
+        embeddings_path=embeddings_path,
+        clustering_manager_dir=models_dir,
+        method=args.params
+    )
+    
+    print(f"Datos cargados: {len(embeddings_data)} muestras, {len(np.unique(labels))} clases únicas")
+    
+    # 6. Preparar datos para clasificación
+    X_train, X_test, y_train, y_test = classifier_manager.prepare_classification_data(
+        embeddings_data, labels, remove_noise=True
+    )
+    
+    # 7. Entrenar clasificadores
+    print("Entrenando clasificadores...")
+    results = classifier_manager.train_classifiers(X_train, y_train, cv_folds=3)
+    
+    # 8. Predecir grupo para el nuevo vector
+    best_model = classifier_manager.best_model
+    predictions, probabilities = classifier_manager.predict_new_data(best_model, embedding.reshape(1, -1))
+    predicted_label = predictions[0]
+    
+    print(f"\n=== RESULTADO DE PREDICCIÓN ===")
+    print(f"Mejor modelo: {best_model}")
+    print(f"Grupo predicho: {predicted_label}")
+    
+    if probabilities is not None:
+        max_prob = np.max(probabilities[0])
+        print(f"Probabilidad máxima: {max_prob:.4f}")
+        
+        # Mostrar probabilidades de todas las clases
+        unique_labels = np.unique(y_train)
+        print("Probabilidades por clase:")
+        for i, label in enumerate(unique_labels):
+            print(f"  Clase {label}: {probabilities[0][i]:.4f}")
 
+    # 9. Reutilizar funciones de búsqueda exacta o top 10 más similar
+    print(f"\n=== BÚSQUEDA EN GRUPO {predicted_label} ===")
+    
+    # Cargar embeddings etiquetados para búsqueda
+    embeddings_umap_labeled_path = f"{models_dir}/embeddings_umap_labeled_{args.params}.npy"
+    embeddings_originales_labeled_path = f"{models_dir}/embeddings_originales_labeled_{args.params}.npy"
+    
+    # Para la búsqueda, necesitamos transformar el embedding con UMAP
+    # Cargar modelo UMAP
+    umap_path = f"{models_dir}/umap_{args.params}.pkl"
+    with open(umap_path, 'rb') as f:
+        umap_model = pickle.load(f)
+    
+    embedding_umap = umap_model.transform(embedding.reshape(1, -1))[0]
+    
+    # Verificar si el embedding ya existe en el grupo
     existe, idx_relativo, idx_global = predictor.existe_en_grupo_por_etiqueta(
-    embedding_umap, embeddings_labeled_path, label
-)
+        embedding_umap, embeddings_umap_labeled_path, predicted_label
+    )
+    
     if existe:
-        print(f"El embedding ya existe en el grupo {label}, índice relativo: {idx_relativo}, índice global: {idx_global}")
+        print(f"El embedding ya existe en el grupo {predicted_label}")
+        print(f"Índice relativo en el grupo: {idx_relativo}")
+        print(f"Índice global en el dataset: {idx_global}")
     else:
-        print(f"El embedding NO existe en el grupo {label}")
-
-        # 7. Si es outlier, buscar los 10 más similares en todos los embeddings
-        if label == -1:
-            print("No se encontró grupo. Buscando los 10 más similares en todos los embeddings...")
-            from sklearn.metrics.pairwise import cosine_similarity
-            embeddings = np.load(embeddings_labeled_path)
-            similarities = cosine_similarity([embedding], embeddings)[0]
+        print(f"El embedding NO existe en el grupo {predicted_label}")
+        
+        # Si es outlier/ruido, buscar los 10 más similares en todos los embeddings
+        if predicted_label == -1:
+            print("Grupo predicho es ruido (-1). Buscando los 10 más similares en todos los embeddings...")
+            embeddings_all = np.load(embeddings_originales_labeled_path)
+            similarities = cosine_similarity([embedding], embeddings_all)[0]
             top10_idx = similarities.argsort()[-10:][::-1]
-            print("Índices de los 10 más similares:", top10_idx)
-            print("Similitudes:", similarities[top10_idx])
-            print("Índice con mayor similitud:", top10_idx[0], "Similitud:", similarities[top10_idx[0]])
+            
+            print("Top 10 más similares:")
+            for i, idx in enumerate(top10_idx):
+                print(f"  {i+1}. Índice: {idx}, Similitud: {similarities[idx]:.4f}")
+                
         else:
+            # Buscar similares dentro del grupo predicho
             top_idx, similarities, idx_global = predictor.buscar_similares_en_grupo_por_etiqueta(
-                embedding, embeddings_labeled_path, label, top_n=10
+                embedding, embeddings_originales_labeled_path, predicted_label, top_n=10
             )
             
             if len(top_idx) > 0:
-                print("Top 10 similares dentro del grupo:")
-                print("Índices relativos en el grupo:", top_idx)
-                print("Índices globales en el archivo:", idx_global)
-                print("Similitudes:", similarities)
+                print(f"Top {len(top_idx)} similares dentro del grupo {predicted_label}:")
+                for i, (rel_idx, glob_idx, sim) in enumerate(zip(top_idx, idx_global, similarities)):
+                    print(f"  {i+1}. Índice relativo: {rel_idx}, Índice global: {glob_idx}, Similitud: {sim:.4f}")
             else:
-                print(f"No se encontraron embeddings en el grupo {label}")
+                print(f"No se encontraron embeddings en el grupo {predicted_label}")
     
+    print(f"\n=== RESUMEN ===")
+    print(f"Vector de entrada procesado exitosamente")
+    print(f"Modelo de embeddings: {nombre}")
+    print(f"Modelo de clasificación: {best_model}")
+    print(f"Grupo predicho: {predicted_label}")
+    if probabilities is not None:
+        print(f"Confianza: {max_prob:.4f}")
 
 if __name__ == "__main__":
     main()

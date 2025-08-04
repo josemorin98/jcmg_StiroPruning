@@ -8,6 +8,7 @@ node_modules/
 *.json
 *.pkl
 *.npy
+*.png
 
 # Bytecode de Python
 __pycache__/

@@ -32,40 +32,27 @@ pip install -r requirements.txt
 
 ## 📁 Estructura del Proyecto
 
-**embeding/**
+├── `src/`
 
-**├── src/**
+│ ├── `Modules/`
+│ │ ├── `model_manager.py` – Gestor de modelos de embeddings
+│ │ ├── `clustering_manager.py` – Gestor de clustering (UMAP + HDBSCAN)
+│ │ ├── `grid_search.py` – Búsqueda en grilla de hiperparámetros
+│ │ └── `predict_vector.py` – Predicción y búsqueda de similares
+│ ├── `generate_embedding.py` – Generación de embeddings
+│ ├── `predict.py` – Script de predicción
+│ └── `clustering_pipeline.py` – Pipeline completo de clustering
 
-**│   ├── Modules/**
+├── `data/`
+│ └── `sample.csv` – Dataset de ejemplo
 
-**│   │   ├── model_manager.py          # Gestor de **modelos de embeddings
+├── `test/`
+│ ├── `embeddings/` – Embeddings generados
+│ └── `Modelos/` – Modelos entrenados
 
-**│   │   ├── clustering_manager.py     # Gestor de **clustering (UMAP + HDBSCAN)
-
-**│   │   ├── grid_search.py           # Búsqueda en **grilla de hiperparámetros
-
-**│   │   └── predict_vector.py        # Predicción **y búsqueda de similares
-
-**│   ├── generate_embedding.py        # Generación **de embeddings
-
-**│   ├── predict.py                  # Script de **predicción
-
-**│   └── clustering_pipeline.py      # Pipeline **completo de clustering
-
-**├── data/**
-
-**│   └── sample.csv                  # Dataset de **ejemplo
-
-**├── test/**
-
-**│   ├── embeddings/                 # Embeddings **generados
-
-**│   └── Modelos/                   # Modelos **entrenados
-
-**└── requirements.txt               # Dependencias **del proyecto
+└── `requirements.txt` – Dependencias del proyecto
 
 ## 🔧 Configuración Inicial
-
 
 ### Preparar Datos
 

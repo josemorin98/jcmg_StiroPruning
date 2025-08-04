@@ -1,3 +1,8 @@
+import os
+import warnings
+# Configuración para ocultar warnings de TensorFlow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Ocultar warnings de TensorFlow
+warnings.filterwarnings('ignore')  # Ocultar otros warnings
 import umap
 import hdbscan
 import numpy as np
@@ -5,9 +10,15 @@ import pandas as pd
 from tqdm import trange
 from functools import partial
 from hyperopt import fmin, tpe, Trials, space_eval, STATUS_OK
-import os 
+from sklearn.model_selection import GridSearchCV
+from sklearn.base import BaseEstimator, ClusterMixin
+from sklearn.metrics import make_scorer
+from .estimators import UMAPEstimator, HDBSCANEstimator, UMAPHDBSCANEstimator
 import pickle
 import time
+import matplotlib.pyplot as plt
+import seaborn as sns   
+
 
 class ClusteringManager:
     """
@@ -40,7 +51,94 @@ class ClusteringManager:
             df = pd.concat([df_ant, df], ignore_index=True)
         df.to_csv(csv_path, index=False)
         
-    def generate_clusters(self, embeddings, n_neighbors, n_components, min_cluster_size):
+    def _generate_clustering_visualization(self, embeddings, best_params, metodo, modelos_dir, umap_model=None, hdbscan_model=None):
+        """
+        Genera una visualización del clustering usando los mejores parámetros encontrados.
+        
+        Parámetros:
+            embeddings (np.ndarray): Embeddings originales.
+            best_params (dict): Mejores parámetros encontrados.
+            metodo (str): Método usado (random, bayesian, grid).
+            modelos_dir (str): Directorio donde guardar la imagen.
+            umap_model (UMAP, opcional): Modelo UMAP ya entrenado.
+            hdbscan_model (HDBSCAN, opcional): Modelo HDBSCAN ya entrenado.
+        """
+        try:
+            # Si los modelos ya están entrenados, usarlos; sino, entrenarlos
+            if umap_model is not None and hdbscan_model is not None:
+                umap_embeddings = umap_model.transform(embeddings)
+                cluster_labels = hdbscan_model.labels_
+            else:
+                # Aplicar UMAP con los mejores parámetros
+                umap_model = umap.UMAP(
+                    n_neighbors=best_params['n_neighbors'],
+                    n_components=best_params['n_components'],
+                    metric='cosine',
+                    n_jobs=-1,
+                    random_state=self.random_state
+                )
+                umap_embeddings = umap_model.fit_transform(embeddings)
+                
+                # Aplicar HDBSCAN
+                hdbscan_model = hdbscan.HDBSCAN(
+                    min_cluster_size=best_params['min_cluster_size'],
+                    metric='euclidean',
+                    cluster_selection_method='eom'
+                )
+                cluster_labels = hdbscan_model.fit_predict(umap_embeddings)
+            
+            # Crear la visualización
+            plt.figure(figsize=(12, 8))
+            
+            # Usar una paleta de colores adecuada
+            unique_labels = np.unique(cluster_labels)
+            n_clusters = len(unique_labels)
+            
+            if n_clusters > 1:
+                # Si hay ruido (-1), usar una paleta que maneje esto
+                if -1 in unique_labels:
+                    colors = plt.cm.Set1(np.linspace(0, 1, n_clusters-1))
+                    # Añadir gris para el ruido
+                    colors = np.vstack([colors, [0.5, 0.5, 0.5, 1.0]])
+                    scatter = plt.scatter(umap_embeddings[:, 0], umap_embeddings[:, 1], 
+                                        c=cluster_labels, cmap='Set1', alpha=0.7, s=50)
+                else:
+                    scatter = plt.scatter(umap_embeddings[:, 0], umap_embeddings[:, 1], 
+                                        c=cluster_labels, cmap='Set1', alpha=0.7, s=50)
+            else:
+                # Solo un cluster
+                scatter = plt.scatter(umap_embeddings[:, 0], umap_embeddings[:, 1], 
+                                    c='blue', alpha=0.7, s=50)
+            
+            plt.title(f'Clustering Visualization - {metodo.title()} Search\n'
+                     f'Clusters: {n_clusters}, n_neighbors: {best_params["n_neighbors"]}, '
+                     f'n_components: {best_params["n_components"]}, '
+                     f'min_cluster_size: {best_params["min_cluster_size"]}',
+                     fontsize=14, pad=20)
+            
+            plt.xlabel('UMAP Component 1', fontsize=12)
+            plt.ylabel('UMAP Component 2', fontsize=12)
+            
+            # Añadir colorbar si hay múltiples clusters
+            if n_clusters > 1:
+                cbar = plt.colorbar(scatter)
+                cbar.set_label('Cluster Label', fontsize=12)
+            
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            
+            # Guardar la imagen
+            os.makedirs(modelos_dir, exist_ok=True)
+            image_path = os.path.join(modelos_dir, f"clustering_visualization_{metodo}.png")
+            plt.savefig(image_path, dpi=300, bbox_inches='tight')
+            plt.close()  # Cerrar la figura para liberar memoria
+            
+            print(f"Visualización del clustering guardada en {image_path}")
+            
+        except Exception as e:
+            print(f"Error al generar la visualización del clustering: {str(e)}")
+        
+    def generate_clusters(self, embeddings, n_neighbors, n_components, min_cluster_size, min_samples=10):
         """
         Aplica UMAP para reducción de dimensionalidad y HDBSCAN para clustering.
 
@@ -49,6 +147,7 @@ class ClusteringManager:
             n_neighbors (int): Número de vecinos para UMAP.
             n_components (int): Número de componentes para UMAP.
             min_cluster_size (int): Tamaño mínimo de clúster para HDBSCAN.
+            min_samples (int): Número mínimo de muestras para HDBSCAN.
 
         Retorna:
             clusters (HDBSCAN object): Objeto ajustado de HDBSCAN con etiquetas y probabilidades.
@@ -56,14 +155,16 @@ class ClusteringManager:
         umap_embeddings = umap.UMAP(
             n_neighbors=n_neighbors,
             n_components=n_components,
+            min_dist=0.0,
             metric='cosine',
-            # random_state=self.random_state,
-
+            random_state=self.random_state,
             n_jobs=-1
         ).fit_transform(embeddings)
 
         clusters = hdbscan.HDBSCAN(
             min_cluster_size=min_cluster_size,
+            min_samples=min_samples,
+            cluster_selection_epsilon=0.0,
             metric='euclidean',
             cluster_selection_method='eom'
         ).fit(umap_embeddings)
@@ -104,38 +205,49 @@ class ClusteringManager:
         # Generar combinaciones aleatorias de hiperparámetros
         results = []
         for i in trange(num_evals):
+            # Valores UMAP
             n_neighbors = np.random.choice(space['n_neighbors'])
             n_components = np.random.choice(space['n_components'])
+            # Valores HDBSCAN
             min_cluster_size = np.random.choice(space['min_cluster_size'])
-            clusters = self.generate_clusters(embeddings, n_neighbors, n_components, min_cluster_size)
+            min_samples = np.random.choice(space['min_samples']) if 'min_samples' in space else 10
+            # Generar clusters
+            clusters = self.generate_clusters(embeddings, n_neighbors, n_components, min_cluster_size, min_samples)
+            # Evaluar clusters
             label_count, cost = self.score_clusters(clusters)
-            results.append([i, n_neighbors, n_components, min_cluster_size, label_count, cost])
+            results.append([i, n_neighbors, n_components, min_cluster_size, min_samples, label_count, cost])
         result_df = pd.DataFrame(
             results,
-            columns=['run_id', 'n_neighbors', 'n_components', 'min_cluster_size', 'label_count', 'cost']
-        )
-        
-         # Obtener la mejor combinación de hiperparámetros
+            columns=['run_id', 'n_neighbors', 'n_components', 'min_cluster_size', 'min_samples', 'label_count', 'cost']
+        ).sort_values(by="cost", ascending=True)
+
+        # Obtener la mejor combinación de hiperparámetros
         best_row = result_df.iloc[0]
         best_params = {
             "n_neighbors": int(best_row["n_neighbors"]),
             "n_components": int(best_row["n_components"]),
-            "min_cluster_size": int(best_row["min_cluster_size"])
+            "min_cluster_size": int(best_row["min_cluster_size"]),
+            "min_samples": int(best_row["min_samples"])
         }
 
         # Entrenar modelos UMAP y HDBSCAN con los mejores parámetros y guardar
+        umap_model = None
+        hdbscan_model = None
         if save_models:
             os.makedirs(modelos_dir, exist_ok=True)
             umap_model = umap.UMAP(
                 n_neighbors=best_params['n_neighbors'],
                 n_components=best_params['n_components'],
+                min_dist=0.0,
                 metric='cosine',
-                # random_state=self.random_state,
+                random_state=self.random_state,
                 n_jobs=-1
             ).fit(embeddings)
             umap_embeddings = umap_model.transform(embeddings)
             hdbscan_model = hdbscan.HDBSCAN(
                 min_cluster_size=best_params['min_cluster_size'],
+                min_samples=best_params['min_samples'],
+                cluster_selection_epsilon=0.0,
                 metric='euclidean',
                 cluster_selection_method='eom'
             ).fit(umap_embeddings)
@@ -145,21 +257,37 @@ class ClusteringManager:
                 pickle.dump(hdbscan_model, f)
             print(f"Modelos UMAP y HDBSCAN guardados en {modelos_dir}")
             
-            # Guardar embeddings etiquetados en un CSV
-            embeddings_labeled = pd.DataFrame(umap_embeddings)
-            embeddings_labeled['label'] = hdbscan_model.labels_
-            csv_labeled_path = os.path.join(modelos_dir, "embeddings_labeled_random.csv")
-            embeddings_labeled.to_csv(csv_labeled_path, index=False)
-            print(f"Embeddings etiquetados guardados en {csv_labeled_path}")
+            # Guardar embeddings originales etiquetados en un CSV
+            embeddings_originales_labeled = pd.DataFrame(embeddings)
+            embeddings_originales_labeled['label'] = hdbscan_model.labels_
+            csv_originales_path = os.path.join(modelos_dir, "embeddings_originales_labeled_random.csv")
+            embeddings_originales_labeled.to_csv(csv_originales_path, index=False)
+            print(f"Embeddings originales etiquetados guardados en {csv_originales_path}")
             
-            # Guardar embeddings etiquetados en un NPY
-            npy_labeled_path = os.path.join(modelos_dir, "embeddings_labeled_random.npy")
-            np.save(npy_labeled_path, embeddings_labeled.values)
-            print(f"Embeddings etiquetados guardados en {npy_labeled_path}")
+            # Guardar embeddings originales etiquetados en un NPY
+            npy_originales_path = os.path.join(modelos_dir, "embeddings_originales_labeled_random.npy")
+            np.save(npy_originales_path, embeddings_originales_labeled.values)
+            print(f"Embeddings originales etiquetados guardados en {npy_originales_path}")
+            
+            # Guardar embeddings UMAP etiquetados en un CSV
+            embeddings_umap_labeled = pd.DataFrame(umap_embeddings)
+            embeddings_umap_labeled['label'] = hdbscan_model.labels_
+            csv_umap_path = os.path.join(modelos_dir, "embeddings_umap_labeled_random.csv")
+            embeddings_umap_labeled.to_csv(csv_umap_path, index=False)
+            print(f"Embeddings UMAP etiquetados guardados en {csv_umap_path}")
+            
+            # Guardar embeddings UMAP etiquetados en un NPY
+            npy_umap_path = os.path.join(modelos_dir, "embeddings_umap_labeled_random.npy")
+            np.save(npy_umap_path, embeddings_umap_labeled.values)
+            print(f"Embeddings UMAP etiquetados guardados en {npy_umap_path}")
             
         tiempo = time.time() - start_time
         print(f"Tiempo random_search: {tiempo:.2f} segundos")
         self._save_time("random_search", tiempo, modelos_dir)
+        
+        # Generar visualización del clustering (reutilizando modelos si están disponibles)
+        self._generate_clustering_visualization(embeddings, best_params, "random", modelos_dir, umap_model, hdbscan_model)
+        
         return result_df, best_params
             # return result_df.sort_values(by='cost')
     
@@ -177,7 +305,8 @@ class ClusteringManager:
         clusters = self.generate_clusters(embeddings,
                                     n_neighbors=params['n_neighbors'],
                                     n_components=params['n_components'],
-                                    min_cluster_size=params['min_cluster_size'])
+                                    min_cluster_size=params['min_cluster_size'],
+                                    min_samples=params.get('min_samples', 10))
 
         label_count, cost = self.score_clusters(clusters, prob_threshold=0.05)
 
@@ -249,37 +378,55 @@ class ClusteringManager:
             print(f"Resultados de la búsqueda bayesiana guardados en {csv_path}")
 
         # Entrenar y guardar modelos UMAP y HDBSCAN con los mejores hiperparámetros
+        umap_model = None
+        hdbscan_model = None
         if save_models:
             os.makedirs(modelos_dir, exist_ok=True)
             umap_model = umap.UMAP(
                 n_neighbors=best_params['n_neighbors'],
                 n_components=best_params['n_components'],
                 metric='cosine',
-                # random_state=best_params.get('random_state', self.random_state),
+                min_dist=0.0,
+                random_state=self.random_state, 
                 n_jobs=-1
             ).fit(embeddings)
             umap_embeddings = umap_model.transform(embeddings)
             hdbscan_model = hdbscan.HDBSCAN(
                 min_cluster_size=best_params['min_cluster_size'],
                 metric='euclidean',
-                cluster_selection_method='eom'
+                cluster_selection_method='eom',
+                min_samples=best_params.get('min_samples', 10),
+                cluster_selection_epsilon=0.0
             ).fit(umap_embeddings)
             with open(os.path.join(modelos_dir, "umap_bayesian.pkl"), "wb") as f:
                 pickle.dump(umap_model, f)
             with open(os.path.join(modelos_dir, "hdbscan_bayesian.pkl"), "wb") as f:
                 pickle.dump(hdbscan_model, f)
             print(f"Modelos UMAP y HDBSCAN guardados en {modelos_dir}")
-            # Guardar embeddings etiquetados en un CSV
-            embeddings_labeled = pd.DataFrame(umap_embeddings)
-            embeddings_labeled['label'] = hdbscan_model.labels_
-            csv_labeled_path = os.path.join(modelos_dir, "embeddings_labeled_bayesian.csv")
-            embeddings_labeled.to_csv(csv_labeled_path, index=False)
-            print(f"Embeddings etiquetados guardados en {csv_labeled_path}")
             
-            # Guardar embeddings etiquetados en un NPY
-            npy_labeled_path = os.path.join(modelos_dir, "embeddings_labeled_bayesian.npy")
-            np.save(npy_labeled_path, embeddings_labeled.values)
-            print(f"Embeddings etiquetados guardados en {npy_labeled_path}")
+            # Guardar embeddings originales etiquetados en un CSV
+            embeddings_originales_labeled = pd.DataFrame(embeddings)
+            embeddings_originales_labeled['label'] = hdbscan_model.labels_
+            csv_originales_path = os.path.join(modelos_dir, "embeddings_originales_labeled_bayesian.csv")
+            embeddings_originales_labeled.to_csv(csv_originales_path, index=False)
+            print(f"Embeddings originales etiquetados guardados en {csv_originales_path}")
+            
+            # Guardar embeddings originales etiquetados en un NPY
+            npy_originales_path = os.path.join(modelos_dir, "embeddings_originales_labeled_bayesian.npy")
+            np.save(npy_originales_path, embeddings_originales_labeled.values)
+            print(f"Embeddings originales etiquetados guardados en {npy_originales_path}")
+            
+            # Guardar embeddings UMAP etiquetados en un CSV
+            embeddings_umap_labeled = pd.DataFrame(umap_embeddings)
+            embeddings_umap_labeled['label'] = hdbscan_model.labels_
+            csv_umap_path = os.path.join(modelos_dir, "embeddings_umap_labeled_bayesian.csv")
+            embeddings_umap_labeled.to_csv(csv_umap_path, index=False)
+            print(f"Embeddings UMAP etiquetados guardados en {csv_umap_path}")
+            
+            # Guardar embeddings UMAP etiquetados en un NPY
+            npy_umap_path = os.path.join(modelos_dir, "embeddings_umap_labeled_bayesian.npy")
+            np.save(npy_umap_path, embeddings_umap_labeled.values)
+            print(f"Embeddings UMAP etiquetados guardados en {npy_umap_path}")
             
             
         best_clusters = self.generate_clusters(
@@ -287,22 +434,23 @@ class ClusteringManager:
             n_neighbors=best_params['n_neighbors'],
             n_components=best_params['n_components'],
             min_cluster_size=best_params['min_cluster_size'],
-            # random_state=best_params.get('random_state', self.random_state)
+            min_samples=best_params.get('min_samples', 10)
         )
         
         tiempo = time.time() - start_time
         print(f"Tiempo bayesian_search: {tiempo:.2f} segundos")
         self._save_time("bayesian_search", tiempo, modelos_dir)
-    
+        
+        # Generar visualización del clustering (reutilizando modelos si están disponibles)
+        self._generate_clustering_visualization(embeddings, best_params, "bayesian", modelos_dir, umap_model, hdbscan_model)
 
         return best_params, best_clusters, trials
     
     def grid_search(self, embeddings, space, save_models=True, modelos_dir="../test/Modelos"):
         """
-        Realiza una búsqueda exhaustiva (grid search) de hiper
-        parámetros para UMAP y HDBSCAN,
-        evaluando todas las combinaciones posibles y registrando sus métricas de agrupamiento.
-        Guarda los mejores modelos UMAP y HDBSCAN si save_models=True.
+        Realiza una búsqueda exhaustiva (grid search) de hiperparámetros para UMAP y HDBSCAN
+        usando GridSearchCV de scikit-learn, evaluando todas las combinaciones posibles 
+        y registrando sus métricas de agrupamiento.
 
         Parámetros:
             embeddings (np.ndarray): Embeddings a reducir y agrupar.
@@ -314,68 +462,247 @@ class ClusteringManager:
             result_df (pd.DataFrame): Tabla ordenada por costo, con las combinaciones evaluadas y sus métricas.
             best_params (dict): Mejor combinación de hiperparámetros.
         """
-        from itertools import product
         start_time = time.time()
-        # Generar todas las combinaciones de hiperparámetros
-        results = []
-        param_grid = list(product(
-            space['n_neighbors'],
-            space['n_components'],
-            space['min_cluster_size']
-        ))
-
-        for i, (n_neighbors, n_components, min_cluster_size) in enumerate(param_grid):
-            clusters = self.generate_clusters(embeddings, n_neighbors, n_components, min_cluster_size)
-            label_count, cost = self.score_clusters(clusters)
-            results.append([i, n_neighbors, n_components, min_cluster_size, label_count, cost])
-
+        
+        # Crear el estimador personalizado
+        estimator = UMAPHDBSCANEstimator(random_state=self.random_state)
+        
+        # Preparar el espacio de parámetros para GridSearchCV
+        param_grid = {
+            'n_neighbors': space['n_neighbors'],
+            'n_components': space['n_components'],
+            'min_cluster_size': space['min_cluster_size'],
+            'min_samples': space.get('min_samples', [10])  # Valor por defecto si no está presente
+        }
+        
+        print(f"Iniciando GridSearchCV con {np.prod([len(v) for v in param_grid.values()])} combinaciones...")
+        
+        # Crear GridSearchCV
+        grid_search = GridSearchCV(
+            estimator=estimator,
+            param_grid=param_grid,
+            cv=2,  # Validación cruzada mínima (2-fold)
+            scoring='neg_mean_squared_error',  # Usaremos el score del estimador
+            n_jobs=-1,  # Usar todos los cores disponibles
+            verbose=1  # Mostrar progreso
+        )
+        
+        # Ajustar el grid search
+        grid_search.fit(embeddings)
+        
+        # Obtener los mejores parámetros
+        best_params = grid_search.best_params_
+        print(f"Mejores parámetros encontrados: {best_params}")
+        print(f"Mejor puntuación: {grid_search.best_score_}")
+        
+        # Crear DataFrame con todos los resultados
+        results_data = []
+        for i, (params, score) in enumerate(zip(grid_search.cv_results_['params'], 
+                                              grid_search.cv_results_['mean_test_score'])):
+            # Recalcular métricas específicas para cada combinación
+            temp_estimator = UMAPHDBSCANEstimator(**params, random_state=self.random_state)
+            temp_estimator.fit(embeddings)
+            
+            label_count = len(np.unique(temp_estimator.labels_))
+            prob_threshold = 0.05
+            cost = np.count_nonzero(temp_estimator.probabilities_ < prob_threshold) / len(temp_estimator.labels_)
+            
+            results_data.append([
+                i,
+                params['n_neighbors'],
+                params['n_components'], 
+                params['min_cluster_size'],
+                params['min_samples'],
+                label_count,
+                cost
+            ])
+        
         result_df = pd.DataFrame(
-            results,
-            columns=['run_id', 'n_neighbors', 'n_components', 'min_cluster_size', 'label_count', 'cost']
+            results_data,
+            columns=['run_id', 'n_neighbors', 'n_components', 'min_cluster_size', 'min_samples', 'label_count', 'cost']
         ).sort_values(by='cost')
 
-        # Obtener la mejor combinación de hiperparámetros
-        best_row = result_df.iloc[0]
-        best_params = {
-            "n_neighbors": int(best_row["n_neighbors"]),
-            "n_components": int(best_row["n_components"]),
-            "min_cluster_size": int(best_row["min_cluster_size"])
-        }
-
         # Entrenar y guardar modelos UMAP y HDBSCAN con los mejores parámetros
+        umap_model = None
+        hdbscan_model = None
         if save_models:
             os.makedirs(modelos_dir, exist_ok=True)
-            umap_model = umap.UMAP(
-                n_neighbors=best_params['n_neighbors'],
-                n_components=best_params['n_components'],
-                metric='cosine',
-                n_jobs=-1
-            ).fit(embeddings)
-            umap_embeddings = umap_model.transform(embeddings)
-            hdbscan_model = hdbscan.HDBSCAN(
-                min_cluster_size=best_params['min_cluster_size'],
-                metric='euclidean',
-                cluster_selection_method='eom'
-            ).fit(umap_embeddings)
+            
+            # Usar el mejor estimador de GridSearchCV
+            best_estimator = grid_search.best_estimator_
+            
+            umap_model = best_estimator.umap_model_
+            hdbscan_model = best_estimator.hdbscan_model_
+            
+            # Guardar modelos
             with open(os.path.join(modelos_dir, "umap_grid.pkl"), "wb") as f:
                 pickle.dump(umap_model, f)
             with open(os.path.join(modelos_dir, "hdbscan_grid.pkl"), "wb") as f:
                 pickle.dump(hdbscan_model, f)
-            print(f"Modelos UMAP y HDBSCAN guardados en {modelos_dir} (grid search)")
+            print(f"Modelos UMAP y HDBSCAN guardados en {modelos_dir} (GridSearchCV)")
             
-            # Guardar embeddings etiquetados en un CSV
-            embeddings_labeled = pd.DataFrame(umap_embeddings)
-            embeddings_labeled['label'] = hdbscan_model.labels_
-            csv_labeled_path = os.path.join(modelos_dir, "embeddings_labeled_grid.csv")
-            embeddings_labeled.to_csv(csv_labeled_path, index=False)
-            print(f"Embeddings etiquetados guardados en {csv_labeled_path}")
+            # Obtener embeddings transformados
+            umap_embeddings = umap_model.transform(embeddings)
             
-            # Guardar embeddings etiquetados en un NPY
-            npy_labeled_path = os.path.join(modelos_dir, "embeddings_labeled_grid.npy")
-            np.save(npy_labeled_path, embeddings_labeled.values)
-            print(f"Embeddings etiquetados guardados en {npy_labeled_path}")
+            # Guardar embeddings originales etiquetados en un CSV
+            embeddings_originales_labeled = pd.DataFrame(embeddings)
+            embeddings_originales_labeled['label'] = best_estimator.labels_
+            csv_originales_path = os.path.join(modelos_dir, "embeddings_originales_labeled_grid.csv")
+            embeddings_originales_labeled.to_csv(csv_originales_path, index=False)
+            print(f"Embeddings originales etiquetados guardados en {csv_originales_path}")
+            
+            # Guardar embeddings originales etiquetados en un NPY
+            npy_originales_path = os.path.join(modelos_dir, "embeddings_originales_labeled_grid.npy")
+            np.save(npy_originales_path, embeddings_originales_labeled.values)
+            print(f"Embeddings originales etiquetados guardados en {npy_originales_path}")
+            
+            # Guardar embeddings UMAP etiquetados en un CSV
+            embeddings_umap_labeled = pd.DataFrame(umap_embeddings)
+            embeddings_umap_labeled['label'] = best_estimator.labels_
+            csv_umap_path = os.path.join(modelos_dir, "embeddings_umap_labeled_grid.csv")
+            embeddings_umap_labeled.to_csv(csv_umap_path, index=False)
+            print(f"Embeddings UMAP etiquetados guardados en {csv_umap_path}")
+            
+            # Guardar embeddings UMAP etiquetados en un NPY
+            npy_umap_path = os.path.join(modelos_dir, "embeddings_umap_labeled_grid.npy")
+            np.save(npy_umap_path, embeddings_umap_labeled.values)
+            print(f"Embeddings UMAP etiquetados guardados en {npy_umap_path}")
+            
         tiempo = time.time() - start_time
-        print(f"Tiempo grid_search: {tiempo:.2f} segundos")
+        print(f"Tiempo GridSearchCV: {tiempo:.2f} segundos")
         self._save_time("grid_search", tiempo, modelos_dir)
+        
+        # Generar visualización del clustering (reutilizando modelos si están disponibles)
+        self._generate_clustering_visualization(embeddings, best_params, "grid", modelos_dir, umap_model, hdbscan_model)
     
         return result_df, best_params
+    
+    def separate_grid_search(self, embeddings, umap_space=None, hdbscan_space=None, save_models=True, modelos_dir="../test/Modelos"):
+        """
+        Realiza GridSearchCV separado: optimiza UMAP primero, luego HDBSCAN.
+        Esto es más eficiente y preciso que optimizar ambos juntos.
+        
+        Parámetros:
+            embeddings (np.ndarray): Embeddings a procesar.
+            umap_space (dict): Espacio de búsqueda para UMAP (opcional).
+            hdbscan_space (dict): Espacio de búsqueda para HDBSCAN (opcional).
+            save_models (bool): Si guardar los modelos optimizados.
+            modelos_dir (str): Directorio donde guardar resultados.
+            
+        Retorna:
+            results (dict): Diccionario con todos los resultados.
+        """
+        start_time = time.time()
+        
+        # Espacios de búsqueda por defecto
+        if umap_space is None:
+            umap_space = {
+                'n_neighbors': [5, 10, 15, 20, 30],
+                'n_components': [2, 3, 5, 10],
+                'min_dist': [0.0, 0.1, 0.25, 0.5]
+            }
+        
+        if hdbscan_space is None:
+            hdbscan_space = {
+                'min_cluster_size': [5, 10, 15, 20, 25, 30],
+                'min_samples': [1, 5, 10, 15, 20],
+                'cluster_selection_epsilon': [0.0, 0.1, 0.2, 0.3]
+            }
+        
+        print("PASO 1: Optimizando UMAP...")
+        
+        # GridSearch para UMAP
+        umap_estimator = UMAPEstimator(random_state=self.random_state)
+        umap_grid = GridSearchCV(
+            estimator=umap_estimator,
+            param_grid=umap_space,
+            cv=3,
+            n_jobs=1,
+            verbose=1
+        )
+        
+        umap_grid.fit(embeddings)
+        best_umap_params = umap_grid.best_params_
+        best_umap_model = umap_grid.best_estimator_
+        
+        
+        print(f"Mejores parámetros UMAP: {best_umap_params}")
+        
+        print("PASO 2: Generando embeddings UMAP...")
+        umap_embeddings = best_umap_model.transform(embeddings)
+        
+        print("PASO 3: Optimizando HDBSCAN...")
+        
+        # GridSearch para HDBSCAN
+        hdbscan_estimator = HDBSCANEstimator()
+        hdbscan_grid = GridSearchCV(
+            estimator=hdbscan_estimator,
+            param_grid=hdbscan_space,
+            cv=3,
+            n_jobs=1,
+            verbose=2
+        )
+        
+        hdbscan_grid.fit(umap_embeddings)
+        best_hdbscan_params = hdbscan_grid.best_params_
+        best_hdbscan_model = hdbscan_grid.best_estimator_
+        
+        print(f"Mejores parámetros HDBSCAN: {best_hdbscan_params}")
+        
+        # Estadísticas finales
+        final_labels = best_hdbscan_model.labels_
+        unique_labels = np.unique(final_labels)
+        n_clusters = len(unique_labels[unique_labels >= 0])
+        n_noise = np.sum(final_labels == -1)
+        
+        print(f"Clusters encontrados: {n_clusters}")
+        print(f"Puntos de ruido: {n_noise} ({n_noise/len(final_labels)*100:.1f}%)")
+        
+        # Combinar mejores parámetros para compatibilidad
+        combined_best_params = {**best_umap_params, **best_hdbscan_params}
+        
+        # Guardar modelos si se solicita
+        if save_models:
+            os.makedirs(modelos_dir, exist_ok=True)
+            
+            # Guardar modelos individuales
+            with open(os.path.join(modelos_dir, "umap_separate_grid.pkl"), "wb") as f:
+                pickle.dump(best_umap_model, f)
+            with open(os.path.join(modelos_dir, "hdbscan_separate_grid.pkl"), "wb") as f:
+                pickle.dump(best_hdbscan_model, f)
+            
+            # Guardar embeddings y resultados
+            np.save(os.path.join(modelos_dir, "umap_embeddings_separate_grid.npy"), umap_embeddings)
+            
+            # Guardar embeddings originales etiquetados
+            embeddings_labeled = pd.DataFrame(embeddings)
+            embeddings_labeled['label'] = final_labels
+            embeddings_labeled.to_csv(os.path.join(modelos_dir, "embeddings_originales_labeled_separate_grid.csv"), index=False)
+            
+            # Guardar embeddings UMAP etiquetados
+            umap_labeled = pd.DataFrame(umap_embeddings)
+            umap_labeled['label'] = final_labels
+            umap_labeled.to_csv(os.path.join(modelos_dir, "embeddings_umap_labeled_separate_grid.csv"), index=False)
+            
+            print(f"Modelos y resultados guardados en {modelos_dir}")
+        
+        tiempo_total = time.time() - start_time
+        print(f"Tiempo total: {tiempo_total:.2f} segundos")
+        self._save_time("separate_grid_search", tiempo_total, modelos_dir)
+        
+        # Generar visualización
+        self._generate_clustering_visualization(embeddings, combined_best_params, "separate_grid", modelos_dir, 
+                                               best_umap_model.umap_model_, best_hdbscan_model.hdbscan_model_)
+        
+        # Crear DataFrame de resultados para compatibilidad
+        result_df = pd.DataFrame([{
+            'run_id': 0,
+            'n_neighbors': combined_best_params['n_neighbors'],
+            'n_components': combined_best_params['n_components'],
+            'min_cluster_size': combined_best_params['min_cluster_size'],
+            'min_samples': combined_best_params['min_samples'],
+            'label_count': n_clusters,
+            'cost': n_noise / len(final_labels)  # Usar proporción de ruido como costo
+        }])
+        
+        return result_df, combined_best_params

@@ -1,4 +1,9 @@
 import os
+import warnings
+# Configuración para ocultar warnings de TensorFlow
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Ocultar warnings de TensorFlow
+warnings.filterwarnings('ignore')  # Ocultar otros warnings
+
 import numpy as np
 import time
 
@@ -27,6 +32,8 @@ class EmbeddingModelManager:
             ValueError: Si el tipo de modelo no es soportado.
         """
         if model_type == "use":
+            import tensorflow as tf
+            tf.get_logger().setLevel('ERROR')  # Solo mostrar errores de TensorFlow
             import tensorflow_hub as hub
             self.models[name] = hub.load(model_path)
         elif model_type == "sentence_transformer":
@@ -60,7 +67,7 @@ class EmbeddingModelManager:
             model_dir = os.path.join(self.save_dir, name)
             os.makedirs(model_dir, exist_ok=True)
         if save:
-            save_path = os.path.join(model_dir, f"{name}_{time.time()}.npy")
+            save_path = os.path.join(model_dir, f"{name}.npy")
             np.save(save_path, embeddings)
         if save_csv:
             save_csv_path = os.path.join(model_dir, f"{name}.csv")
