@@ -145,14 +145,14 @@ def main():
         umap_param_grid = {
             # 'n_neighbors': [15, 20, 25, 30, 35, 40, 45],
             # 'n_components': [2, 3],
-            "n_neighbors": np.arange(15, 50),
+            "n_neighbors": np.arange(40, 50, 2),
             "n_components": np.arange(2, 4),
             'min_dist': [0.0, 0.1, 0.25]
             # "min_samples": np.arange(50, 150)
         }
         hdbscan_param_grid = {
-            'min_cluster_size': [120, 140, 160, 180],
-            'min_samples': [50, 75, 100, 125],
+            'min_cluster_size': np.arange(150,200,10),# [120, 140, 160, 180],
+            'min_samples': np.arange(50, 150, 25),
             # 'cluster_selection_epsilon': [0.0, 0.1, 0.2]
         }
     else:

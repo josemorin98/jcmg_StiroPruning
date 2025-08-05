@@ -446,137 +446,6 @@ class ClusteringManager:
 
         return best_params, best_clusters, trials
     
-    def grid_search(self, embeddings, space, save_models=True, modelos_dir="../test/Modelos"):
-        """
-        Realiza una búsqueda exhaustiva (grid search) de hiperparámetros para UMAP y HDBSCAN
-        usando GridSearchCV de scikit-learn, evaluando todas las combinaciones posibles 
-        y registrando sus métricas de agrupamiento.
-
-        Parámetros:
-            embeddings (np.ndarray): Embeddings a reducir y agrupar.
-            space (dict): Diccionario con listas de valores para cada hiperparámetro.
-            save_models (bool): Si es True, guarda los modelos entrenados con la mejor combinación.
-            modelos_dir (str): Carpeta donde se guardarán los modelos.
-
-        Retorna:
-            result_df (pd.DataFrame): Tabla ordenada por costo, con las combinaciones evaluadas y sus métricas.
-            best_params (dict): Mejor combinación de hiperparámetros.
-        """
-        start_time = time.time()
-        
-        # Crear el estimador personalizado
-        estimator = UMAPHDBSCANEstimator(random_state=self.random_state)
-        
-        # Preparar el espacio de parámetros para GridSearchCV
-        param_grid = {
-            'n_neighbors': space['n_neighbors'],
-            'n_components': space['n_components'],
-            'min_cluster_size': space['min_cluster_size'],
-            'min_samples': space.get('min_samples', [10])  # Valor por defecto si no está presente
-        }
-        
-        print(f"Iniciando GridSearchCV con {np.prod([len(v) for v in param_grid.values()])} combinaciones...")
-        
-        # Crear GridSearchCV
-        grid_search = GridSearchCV(
-            estimator=estimator,
-            param_grid=param_grid,
-            cv=2,  # Validación cruzada mínima (2-fold)
-            scoring='neg_mean_squared_error',  # Usaremos el score del estimador
-            n_jobs=-1,  # Usar todos los cores disponibles
-            verbose=1  # Mostrar progreso
-        )
-        
-        # Ajustar el grid search
-        grid_search.fit(embeddings)
-        
-        # Obtener los mejores parámetros
-        best_params = grid_search.best_params_
-        print(f"Mejores parámetros encontrados: {best_params}")
-        print(f"Mejor puntuación: {grid_search.best_score_}")
-        
-        # Crear DataFrame con todos los resultados
-        results_data = []
-        for i, (params, score) in enumerate(zip(grid_search.cv_results_['params'], 
-                                              grid_search.cv_results_['mean_test_score'])):
-            # Recalcular métricas específicas para cada combinación
-            temp_estimator = UMAPHDBSCANEstimator(**params, random_state=self.random_state)
-            temp_estimator.fit(embeddings)
-            
-            label_count = len(np.unique(temp_estimator.labels_))
-            prob_threshold = 0.05
-            cost = np.count_nonzero(temp_estimator.probabilities_ < prob_threshold) / len(temp_estimator.labels_)
-            
-            results_data.append([
-                i,
-                params['n_neighbors'],
-                params['n_components'], 
-                params['min_cluster_size'],
-                params['min_samples'],
-                label_count,
-                cost
-            ])
-        
-        result_df = pd.DataFrame(
-            results_data,
-            columns=['run_id', 'n_neighbors', 'n_components', 'min_cluster_size', 'min_samples', 'label_count', 'cost']
-        ).sort_values(by='cost')
-
-        # Entrenar y guardar modelos UMAP y HDBSCAN con los mejores parámetros
-        umap_model = None
-        hdbscan_model = None
-        if save_models:
-            os.makedirs(modelos_dir, exist_ok=True)
-            
-            # Usar el mejor estimador de GridSearchCV
-            best_estimator = grid_search.best_estimator_
-            
-            umap_model = best_estimator.umap_model_
-            hdbscan_model = best_estimator.hdbscan_model_
-            
-            # Guardar modelos
-            with open(os.path.join(modelos_dir, "umap_grid.pkl"), "wb") as f:
-                pickle.dump(umap_model, f)
-            with open(os.path.join(modelos_dir, "hdbscan_grid.pkl"), "wb") as f:
-                pickle.dump(hdbscan_model, f)
-            print(f"Modelos UMAP y HDBSCAN guardados en {modelos_dir} (GridSearchCV)")
-            
-            # Obtener embeddings transformados
-            umap_embeddings = umap_model.transform(embeddings)
-            
-            # Guardar embeddings originales etiquetados en un CSV
-            embeddings_originales_labeled = pd.DataFrame(embeddings)
-            embeddings_originales_labeled['label'] = best_estimator.labels_
-            csv_originales_path = os.path.join(modelos_dir, "embeddings_originales_labeled_grid.csv")
-            embeddings_originales_labeled.to_csv(csv_originales_path, index=False)
-            print(f"Embeddings originales etiquetados guardados en {csv_originales_path}")
-            
-            # Guardar embeddings originales etiquetados en un NPY
-            npy_originales_path = os.path.join(modelos_dir, "embeddings_originales_labeled_grid.npy")
-            np.save(npy_originales_path, embeddings_originales_labeled.values)
-            print(f"Embeddings originales etiquetados guardados en {npy_originales_path}")
-            
-            # Guardar embeddings UMAP etiquetados en un CSV
-            embeddings_umap_labeled = pd.DataFrame(umap_embeddings)
-            embeddings_umap_labeled['label'] = best_estimator.labels_
-            csv_umap_path = os.path.join(modelos_dir, "embeddings_umap_labeled_grid.csv")
-            embeddings_umap_labeled.to_csv(csv_umap_path, index=False)
-            print(f"Embeddings UMAP etiquetados guardados en {csv_umap_path}")
-            
-            # Guardar embeddings UMAP etiquetados en un NPY
-            npy_umap_path = os.path.join(modelos_dir, "embeddings_umap_labeled_grid.npy")
-            np.save(npy_umap_path, embeddings_umap_labeled.values)
-            print(f"Embeddings UMAP etiquetados guardados en {npy_umap_path}")
-            
-        tiempo = time.time() - start_time
-        print(f"Tiempo GridSearchCV: {tiempo:.2f} segundos")
-        self._save_time("grid_search", tiempo, modelos_dir)
-        
-        # Generar visualización del clustering (reutilizando modelos si están disponibles)
-        self._generate_clustering_visualization(embeddings, best_params, "grid", modelos_dir, umap_model, hdbscan_model)
-    
-        return result_df, best_params
-    
     def separate_grid_search(self, embeddings, umap_space=None, hdbscan_space=None, save_models=True, modelos_dir="../test/Modelos"):
         """
         Realiza GridSearchCV separado: optimiza UMAP primero, luego HDBSCAN.
@@ -618,7 +487,7 @@ class ClusteringManager:
             param_grid=umap_space,
             cv=3,
             n_jobs=1,
-            verbose=1
+            verbose=3
         )
         
         umap_grid.fit(embeddings)
@@ -640,7 +509,7 @@ class ClusteringManager:
             param_grid=hdbscan_space,
             cv=3,
             n_jobs=1,
-            verbose=2
+            verbose=3
         )
         
         hdbscan_grid.fit(umap_embeddings)
