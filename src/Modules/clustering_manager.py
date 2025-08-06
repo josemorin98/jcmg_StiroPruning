@@ -486,7 +486,7 @@ class ClusteringManager:
             estimator=umap_estimator,
             param_grid=umap_space,
             cv=3,
-            n_jobs=1,
+            n_jobs=-1,
             verbose=3
         )
         
@@ -508,7 +508,7 @@ class ClusteringManager:
             estimator=hdbscan_estimator,
             param_grid=hdbscan_space,
             cv=3,
-            n_jobs=1,
+            n_jobs=-1,
             verbose=3
         )
         

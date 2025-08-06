@@ -182,7 +182,7 @@ def main():
     print(f"Total de evaluaciones: {umap_combinations + hdbscan_combinations}")
     
     # Ejecutar Grid Search separado
-    grid_results = clustering.separate_grid_search(
+    grid_results, combined_best_params = clustering.separate_grid_search(
         embeddings=embeddings,
         umap_space=umap_param_grid,
         hdbscan_space=hdbscan_param_grid,
@@ -190,12 +190,22 @@ def main():
         modelos_dir=f"{path_test}/Modelos_{args.modelo}{output_suffix}",
     )
     
+    # Depuración: mostrar estructura real del diccionario retornado
+    print("combined_best_params:", combined_best_params)
+
     # Extraer mejores parámetros
+    umap_params = {k: combined_best_params[k] for k in ['n_neighbors', 'n_components', 'min_dist'] if k in combined_best_params}
+    hdbscan_params = {k: combined_best_params[k] for k in ['min_cluster_size', 'min_samples'] if k in combined_best_params}
+    
+    # Extraer valores del DataFrame de resultados
+    n_clusters = grid_results.iloc[0]['label_count']
+    noise_ratio = grid_results.iloc[0]['cost']
+    
     best_grid_params = {
-        'umap_params': grid_results['best_umap_params'],
-        'hdbscan_params': grid_results['best_hdbscan_params'],
-        'n_clusters': grid_results['n_clusters'],
-        'noise_ratio': grid_results['noise_ratio']
+        'umap_params': umap_params,
+        'hdbscan_params': hdbscan_params,
+        'n_clusters': n_clusters,
+        'noise_ratio': noise_ratio
     }
     
     # Guardar resultados
@@ -203,21 +213,19 @@ def main():
         'optimization_method': 'separate_gridsearch',
         'model': args.modelo,
         'use_adjusted': args.use_adjusted,
-        **grid_results['best_umap_params'],
-        **grid_results['best_hdbscan_params'],
-        'final_n_clusters': grid_results['n_clusters'],
-        'final_noise_ratio': grid_results['noise_ratio'],
-        'umap_score': grid_results['best_umap_score'],
-        'hdbscan_score': grid_results['best_hdbscan_score'],
+        **umap_params,
+        **hdbscan_params,
+        'final_n_clusters': n_clusters,
+        'final_noise_ratio': noise_ratio,
         'total_time_seconds': time.time() - start_time
     }
     
     pd.DataFrame([grid_summary]).to_csv(f"{path_test}/grid_{args.modelo}{output_suffix}.csv", index=False)
     print(f"Grid Search completado en {time.time() - start_time:.2f} segundos.")
-    print(f"Mejores parámetros UMAP: {grid_results['best_umap_params']}")
-    print(f"Mejores parámetros HDBSCAN: {grid_results['best_hdbscan_params']}")
-    print(f"Clusters encontrados: {grid_results['n_clusters']}")
-    print(f"Ratio de ruido: {grid_results['noise_ratio']:.3f}")
+    print(f"Mejores parámetros UMAP: {umap_params}")
+    print(f"Mejores parámetros HDBSCAN: {hdbscan_params}")
+    print(f"Clusters encontrados: {n_clusters}")
+    print(f"Ratio de ruido: {noise_ratio:.3f}")
 
     # ===============================================================================
     # RESUMEN FINAL DE TODAS LAS BÚSQUEDAS
