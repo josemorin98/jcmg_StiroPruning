@@ -11,6 +11,7 @@ from sklearn.metrics import classification_report, confusion_matrix, accuracy_sc
 import matplotlib.pyplot as plt
 import seaborn as sns
 import time
+from sklearn.neural_network import MLPClassifier
 
 class ClassificationManager:
     """
@@ -28,9 +29,10 @@ class ClassificationManager:
         self.random_state = random_state
         self.classifiers = {
             'random_forest': RandomForestClassifier(random_state=random_state, n_estimators=100),
-            'logistic_regression': LogisticRegression(random_state=random_state, max_iter=1000),
-            'svm': SVC(random_state=random_state, probability=True),
-            'knn': KNeighborsClassifier(n_neighbors=5)
+            # 'logistic_regression': LogisticRegression(random_state=random_state, max_iter=1000),
+            # 'svm': SVC(random_state=random_state, probability=True),
+            # 'knn': KNeighborsClassifier(n_neighbors=5)
+            "mlp": MLPClassifier(random_state=random_state, max_iter=100)
         }
         self.trained_models = {}
         self.best_model = None
@@ -91,7 +93,7 @@ class ClassificationManager:
         else:
             raise ValueError("Debe proporcionar labels_path o clustering_manager_dir")
             
-        return embeddings, labels
+        return embeddings[:, :-1], labels
     
     def prepare_classification_data(self, embeddings, labels, remove_noise=True, test_size=0.2):
         """

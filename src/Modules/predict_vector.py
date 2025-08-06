@@ -31,31 +31,69 @@ class PredictVector:
         embedding = self.manager.embed(self.model_name, [entrada])[0]
         return embedding
 
-    def predecir_grupo(self, embedding, umap_path, cluster_model_path):
+    def predecir_grupo(self, embedding, embeddings_labeled_path, top_n=1):
         """
-        Reduce el embedding con UMAP y predice el grupo usando el modelo de clustering (HDBSCAN).
+        Busca el grupo más probable para el embedding de entrada comparando directamente 
+        con los embeddings originales etiquetados.
 
         Parámetros:
             embedding (np.ndarray): Vector embedding de entrada.
-            umap_path (str): Ruta al modelo UMAP entrenado (pkl).
-            cluster_model_path (str): Ruta al modelo de clustering entrenado (pkl).
+            embeddings_labeled_path (str): Ruta al archivo .npy con todos los embeddings etiquetados.
+            top_n (int): Número de vecinos más similares a considerar (por defecto 1).
 
         Retorna:
-            label (int): Etiqueta del grupo predicho (-1 si es outlier).
-            embedding_umap (np.ndarray): Embedding reducido por UMAP.
-            cluster_model (objeto): Modelo de clustering cargado.
+            label (int): Etiqueta del grupo predicho.
+            similarity (float): Similitud coseno con el embedding más similar.
+            idx_global (int): Índice global del embedding más similar.
         """
-        with open(umap_path, "rb") as f:
-            umap_model = pickle.load(f)
-        with open(cluster_model_path, "rb") as f:
-            cluster_model = pickle.load(f)
-        embedding_umap = umap_model.transform([embedding])
-        # Para HDBSCAN, usar .predict si está disponible, si no, usar .labels_
-        if hasattr(cluster_model, "predict"):
-            label = cluster_model.predict(embedding_umap)[0]
-        else:
-            label = cluster_model.labels_[0]
-        return label, embedding_umap
+        # Cargar embeddings etiquetados (.npy que incluye la columna 'label')
+        embeddings_labeled = np.load(embeddings_labeled_path)
+        
+        # Separar los embeddings de las etiquetas (asumiendo que la última columna es 'label')
+        embeddings = embeddings_labeled[:, :-1]  # Todas las columnas excepto la última
+        labels = embeddings_labeled[:, -1]       # Última columna (etiquetas)
+        
+        # Calcular similitudes coseno con todos los embeddings
+        similarities = cosine_similarity([embedding], embeddings)[0]
+        
+        # Encontrar el embedding más similar
+        idx_mas_similar = similarities.argmax()
+        similarity_max = similarities[idx_mas_similar]
+        label_predicho = int(labels[idx_mas_similar])
+        
+        return label_predicho, similarity_max, idx_mas_similar
+
+    def predecir_top_grupos(self, embedding, embeddings_labeled_path, top_n=5):
+        """
+        Busca los top_n grupos más probables para el embedding de entrada.
+
+        Parámetros:
+            embedding (np.ndarray): Vector embedding de entrada.
+            embeddings_labeled_path (str): Ruta al archivo .npy con todos los embeddings etiquetados.
+            top_n (int): Número de grupos top a retornar.
+
+        Retorna:
+            top_labels (list): Lista de etiquetas de grupos ordenadas por probabilidad.
+            top_similarities (list): Lista de similitudes correspondientes.
+            top_indices (list): Lista de índices globales correspondientes.
+        """
+        # Cargar embeddings etiquetados (.npy que incluye la columna 'label')
+        embeddings_labeled = np.load(embeddings_labeled_path)
+        
+        # Separar los embeddings de las etiquetas (asumiendo que la última columna es 'label')
+        embeddings = embeddings_labeled[:, :-1]  # Todas las columnas excepto la última
+        labels = embeddings_labeled[:, -1]       # Última columna (etiquetas)
+        
+        # Calcular similitudes coseno con todos los embeddings
+        similarities = cosine_similarity([embedding], embeddings)[0]
+        
+        # Obtener los top_n más similares
+        top_indices = similarities.argsort()[-top_n:][::-1]
+        top_similarities = similarities[top_indices]
+        top_labels = [int(labels[idx]) for idx in top_indices]
+        
+        return top_labels, top_similarities.tolist(), top_indices.tolist()
+
     def existe_en_grupo(self, embedding, embeddings_path, labels_path, grupo_id, atol=1e-6):
         """
         Verifica si el embedding de entrada existe exactamente (o casi exactamente) en el grupo especificado.
