@@ -11,7 +11,7 @@ import time
 def main():
     parser = argparse.ArgumentParser(description="Predicción de grupo usando clasificación para un vector de entrada.")
     parser.add_argument("--modelo", type=str, choices=["use", "st1", "st2", "st3"], help="Modelo de embeddings a usar", default="st1")
-    parser.add_argument("--params", type=str, choices=["random", "bayesian"], help="Tipo de parámetros de clustering usados", default="bayesian")
+    parser.add_argument("--params", type=str, choices=["random", "bayesian", "spearate_grid"], help="Tipo de parámetros de clustering usados", default="bayesian")
     parser.add_argument("--embeddings_path", type=str, default="../test/embeddings", help="Ruta al archivo .npy de embeddings")
     parser.add_argument("--models_dir", type=str, default="../test/Modelos", help="Directorio donde están los modelos")
     parser.add_argument("--use_adjusted", action="store_true", help="Usar embeddings ajustados con columnas spatial, temporal e interest")
@@ -27,8 +27,13 @@ def main():
     
     # 1. Vector de entrada (mismo formato que antes)
     print("\n=== VECTOR DE ENTRADA ===")
-    vector_input = ["Jalisco.Zapopan", "2021", "Hombres.Total", "0.2810551936189229", "0.2810551936189229"]
+    vector_input = ["Mexico.Total", "2012", "Mujeres.>65", "0.139", "0.139"]
     print("Vector entrada:", vector_input)
+    if args.use_adjusted:
+        # Para embeddings ajustados, agregar las columnas spatial, temporal e interest
+        vector_input.extend(["spatial", "temporal", "interest"])
+        print("Vector entrada ajustado:", vector_input)
+    # vector_input = ["Mexico.Total", "2012", "Mujeres.>65", "0.2810551936189229", "0.2810551936189229"]
     query_string = ' '.join([str(x).replace(' ', '_') for x in vector_input])
     print("Vector en sentencia:", query_string)
 
@@ -55,11 +60,16 @@ def main():
     
     # 5. Cargar datos de clustering para entrenar el clasificador
     models_dir = f"{args.models_dir}_{args.modelo}{model_suffix}"
-    embeddings_path = f"../test/embeddings/{args.modelo}/{args.modelo}{model_suffix}.npy"
+    # embeddings_path = f"../test/Modelos_{args.modelo}{model_suffix}/embeddings_originales_labeled.npy"
     
+    # Cargar embeddings etiquetados para búsqueda
+    # embeddings_umap_labeled_path = f"{models_dir}/embeddings_umap_labeled_{args.params}.npy"
+    embeddings_originales_labeled_path = f"{models_dir}/embeddings_originales_labeled_{args.params}.npy"
     print(f"Cargando datos desde: {models_dir}")
+    print(f"Cargando embeddings origianles etiquetados desde: {embeddings_originales_labeled_path}")
+    
     embeddings_data, labels = classifier_manager.load_clustering_data(
-        embeddings_path=embeddings_path,
+        embeddings_path=embeddings_originales_labeled_path,
         clustering_manager_dir=models_dir,
         method=args.params
     )
@@ -97,21 +107,9 @@ def main():
     # 9. Reutilizar funciones de búsqueda exacta o top 10 más similar
     print(f"\n=== BÚSQUEDA EN GRUPO {predicted_label} ===")
     
-    # Cargar embeddings etiquetados para búsqueda
-    embeddings_umap_labeled_path = f"{models_dir}/embeddings_umap_labeled_{args.params}.npy"
-    embeddings_originales_labeled_path = f"{models_dir}/embeddings_originales_labeled_{args.params}.npy"
-    
-    # Para la búsqueda, necesitamos transformar el embedding con UMAP
-    # Cargar modelo UMAP
-    umap_path = f"{models_dir}/umap_{args.params}.pkl"
-    with open(umap_path, 'rb') as f:
-        umap_model = pickle.load(f)
-    
-    embedding_umap = umap_model.transform(embedding.reshape(1, -1))[0]
-    
-    # Verificar si el embedding ya existe en el grupo
+    # Verificar si el embedding ya existe exactamente en el grupo
     existe, idx_relativo, idx_global = predictor.existe_en_grupo_por_etiqueta(
-        embedding_umap, embeddings_umap_labeled_path, predicted_label
+        embedding, embeddings_originales_labeled_path, predicted_label
     )
     
     if existe:
@@ -124,13 +122,17 @@ def main():
         # Si es outlier/ruido, buscar los 10 más similares en todos los embeddings
         if predicted_label == -1:
             print("Grupo predicho es ruido (-1). Buscando los 10 más similares en todos los embeddings...")
-            embeddings_all = np.load(embeddings_originales_labeled_path)
+            # Cargar embeddings originales etiquetados
+            embeddings_labeled = np.load(embeddings_originales_labeled_path)
+            embeddings_all = embeddings_labeled[:, :-1]  # Todas las columnas excepto la última (etiquetas)
             similarities = cosine_similarity([embedding], embeddings_all)[0]
             top10_idx = similarities.argsort()[-10:][::-1]
             
             print("Top 10 más similares:")
             for i, idx in enumerate(top10_idx):
-                print(f"  {i+1}. Índice: {idx}, Similitud: {similarities[idx]:.4f}")
+                # Obtener la etiqueta del embedding similar
+                label_similar = int(embeddings_labeled[idx, -1])
+                print(f"  {i+1}. Índice: {idx}, Similitud: {similarities[idx]:.4f}, Grupo: {label_similar}")
                 
         else:
             # Buscar similares dentro del grupo predicho

@@ -13,6 +13,8 @@ from hyperopt import fmin, tpe, Trials, space_eval, STATUS_OK
 from sklearn.model_selection import GridSearchCV
 from sklearn.base import BaseEstimator, ClusterMixin
 from sklearn.metrics import make_scorer
+from sklearn.neighbors import NearestNeighbors
+from sklearn.metrics.pairwise import euclidean_distances
 from .estimators import UMAPEstimator, HDBSCANEstimator, UMAPHDBSCANEstimator
 import pickle
 import time
@@ -37,6 +39,172 @@ class ClusteringManager:
         if model not in ["use", "st1", "st2", "st3"]:
             raise ValueError(f"Modelo no soportado: {model}")
         self.random_state = random_state
+
+    def _calculate_dbcv(self, embeddings, labels):
+        """
+        Calcula la métrica DBCV (Density-Based Cluster Validation) de manera simplificada.
+        Implementación propia basada en la separación inter-cluster e intra-cluster.
+        
+        Parámetros:
+            embeddings (np.ndarray): Embeddings utilizados para clustering.
+            labels (np.ndarray): Etiquetas de clustering.
+            
+        Retorna:
+            float: Valor DBCV aproximado o None si no se puede calcular.
+        """
+        try:
+            # Filtrar puntos de ruido (-1) para DBCV
+            non_noise_mask = labels != -1
+            if np.sum(non_noise_mask) < 2:
+                print("Warning: No hay suficientes puntos no-ruido para calcular DBCV")
+                return None
+            
+            filtered_embeddings = embeddings[non_noise_mask]
+            filtered_labels = labels[non_noise_mask]
+            
+            # Verificar que hay al menos 2 clusters
+            unique_labels = np.unique(filtered_labels)
+            if len(unique_labels) < 2:
+                print("Warning: Se necesitan al menos 2 clusters para calcular DBCV")
+                return None
+            
+            # Implementación simplificada de DBCV
+            # Basada en densidad local y separación entre clusters
+            
+            # Calcular distancias dentro de cada cluster (cohesión)
+            intra_cluster_distances = []
+            for label in unique_labels:
+                cluster_mask = filtered_labels == label
+                cluster_points = filtered_embeddings[cluster_mask]
+                
+                if len(cluster_points) > 1:
+                    # Distancia promedio dentro del cluster
+                    distances = euclidean_distances(cluster_points)
+                    # Tomar el triángulo superior excluyendo la diagonal
+                    upper_triangle = np.triu(distances, k=1)
+                    non_zero_distances = upper_triangle[upper_triangle > 0]
+                    if len(non_zero_distances) > 0:
+                        avg_intra_dist = np.mean(non_zero_distances)
+                        intra_cluster_distances.append(avg_intra_dist)
+            
+            # Calcular distancias entre clusters (separación)
+            inter_cluster_distances = []
+            for i, label1 in enumerate(unique_labels):
+                for label2 in unique_labels[i+1:]:
+                    cluster1_points = filtered_embeddings[filtered_labels == label1]
+                    cluster2_points = filtered_embeddings[filtered_labels == label2]
+                    
+                    # Distancia promedio entre clusters
+                    distances = euclidean_distances(cluster1_points, cluster2_points)
+                    avg_inter_dist = np.mean(distances)
+                    inter_cluster_distances.append(avg_inter_dist)
+            
+            if len(intra_cluster_distances) == 0 or len(inter_cluster_distances) == 0:
+                return None
+            
+            # Calcular DBCV simplificado
+            avg_intra = np.mean(intra_cluster_distances)
+            avg_inter = np.mean(inter_cluster_distances)
+            
+            # DBCV = (separación - cohesión) / max(separación, cohesión)
+            # Valores más altos indican mejor clustering
+            if max(avg_inter, avg_intra) > 0:
+                dbcv_score = (avg_inter - avg_intra) / max(avg_inter, avg_intra)
+            else:
+                dbcv_score = 0.0
+            
+            return dbcv_score
+            
+        except Exception as e:
+            print(f"Error calculando DBCV: {str(e)}")
+            return None
+
+    def _save_dbcv_results(self, method_name, best_params, dbcv_score, n_clusters, noise_ratio, modelos_dir):
+        """
+        Guarda los resultados de DBCV en un CSV específico.
+        
+        Parámetros:
+            method_name (str): Nombre del método (random, bayesian, grid_search)
+            best_params (dict): Mejores parámetros encontrados
+            dbcv_score (float): Score DBCV calculado
+            n_clusters (int): Número de clusters
+            noise_ratio (float): Proporción de ruido
+            modelos_dir (str): Directorio donde guardar
+        """
+        try:
+            os.makedirs(modelos_dir, exist_ok=True)
+            
+            dbcv_results = {
+                'method': method_name,
+                'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
+                'n_neighbors': best_params.get('n_neighbors', None),
+                'n_components': best_params.get('n_components', None),
+                'min_cluster_size': best_params.get('min_cluster_size', None),
+                'min_samples': best_params.get('min_samples', None),
+                'min_dist': best_params.get('min_dist', None),
+                'n_clusters': n_clusters,
+                'noise_ratio': noise_ratio,
+                'dbcv_score': dbcv_score,
+                'model': self.model
+            }
+            
+            csv_path = os.path.join(modelos_dir, f"dbcv_results_{method_name}.csv")
+            df = pd.DataFrame([dbcv_results])
+            
+            # Si el archivo existe, agregarlo; si no, crearlo
+            if os.path.exists(csv_path):
+                df_existing = pd.read_csv(csv_path)
+                df_combined = pd.concat([df_existing, df], ignore_index=True)
+                df_combined.to_csv(csv_path, index=False)
+            else:
+                df.to_csv(csv_path, index=False)
+            
+            print(f"Resultados DBCV guardados en {csv_path}")
+            
+        except Exception as e:
+            print(f"Error guardando resultados DBCV: {str(e)}")
+
+    def _save_consolidated_dbcv_results(self, modelos_dir):
+        """
+        Crea un archivo consolidado con todos los resultados DBCV de los diferentes métodos.
+        """
+        try:
+            consolidated_data = []
+            
+            # Buscar todos los archivos de resultados DBCV
+            methods = ['random_search', 'bayesian_search', 'separate_grid_search']
+            
+            for method in methods:
+                csv_path = os.path.join(modelos_dir, f"dbcv_results_{method}.csv")
+                if os.path.exists(csv_path):
+                    df_method = pd.read_csv(csv_path)
+                    consolidated_data.append(df_method)
+            
+            if consolidated_data:
+                # Combinar todos los DataFrames
+                consolidated_df = pd.concat(consolidated_data, ignore_index=True)
+                
+                # Ordenar por DBCV score (descendente - mejores primero)
+                consolidated_df = consolidated_df.sort_values('dbcv_score', ascending=False, na_last=True)
+                
+                # Guardar archivo consolidado
+                consolidated_path = os.path.join(modelos_dir, "dbcv_results_consolidated.csv")
+                consolidated_df.to_csv(consolidated_path, index=False)
+                
+                print(f"Resultados DBCV consolidados guardados en {consolidated_path}")
+                
+                # Mostrar resumen
+                print("\n=== RESUMEN DE RESULTADOS DBCV ===")
+                for method in consolidated_df['method'].unique():
+                    method_data = consolidated_df[consolidated_df['method'] == method]
+                    if not method_data.empty and not pd.isna(method_data.iloc[0]['dbcv_score']):
+                        best_score = method_data.iloc[0]['dbcv_score']
+                        print(f"{method}: DBCV = {best_score:.4f}")
+                    else:
+                        print(f"{method}: DBCV = No disponible")
+                        
+        except Exception as e:
+            print(f"Error creando archivo consolidado DBCV: {str(e)}")
 
     def _save_time(self, metodo, tiempo, modelos_dir):
         os.makedirs(modelos_dir, exist_ok=True)
@@ -138,7 +306,7 @@ class ClusteringManager:
         except Exception as e:
             print(f"Error al generar la visualización del clustering: {str(e)}")
         
-    def generate_clusters(self, embeddings, n_neighbors, n_components, min_cluster_size, min_samples=10):
+    def generate_clusters(self, embeddings, n_neighbors, n_components, min_cluster_size, min_samples=10, min_dist=0.0):
         """
         Aplica UMAP para reducción de dimensionalidad y HDBSCAN para clustering.
 
@@ -148,6 +316,7 @@ class ClusteringManager:
             n_components (int): Número de componentes para UMAP.
             min_cluster_size (int): Tamaño mínimo de clúster para HDBSCAN.
             min_samples (int): Número mínimo de muestras para HDBSCAN.
+            min_dist (float): Distancia mínima para UMAP.
 
         Retorna:
             clusters (HDBSCAN object): Objeto ajustado de HDBSCAN con etiquetas y probabilidades.
@@ -155,7 +324,7 @@ class ClusteringManager:
         umap_embeddings = umap.UMAP(
             n_neighbors=n_neighbors,
             n_components=n_components,
-            min_dist=0.0,
+            min_dist=min_dist,
             metric='cosine',
             random_state=self.random_state,
             n_jobs=-1
@@ -208,17 +377,18 @@ class ClusteringManager:
             # Valores UMAP
             n_neighbors = np.random.choice(space['n_neighbors'])
             n_components = np.random.choice(space['n_components'])
+            min_dist = np.random.choice(space['min_dist']) if 'min_dist' in space else 0.0
             # Valores HDBSCAN
             min_cluster_size = np.random.choice(space['min_cluster_size'])
             min_samples = np.random.choice(space['min_samples']) if 'min_samples' in space else 10
             # Generar clusters
-            clusters = self.generate_clusters(embeddings, n_neighbors, n_components, min_cluster_size, min_samples)
+            clusters = self.generate_clusters(embeddings, n_neighbors, n_components, min_cluster_size, min_samples, min_dist)
             # Evaluar clusters
             label_count, cost = self.score_clusters(clusters)
-            results.append([i, n_neighbors, n_components, min_cluster_size, min_samples, label_count, cost])
+            results.append([i, n_neighbors, n_components, min_cluster_size, min_samples, min_dist, label_count, cost])
         result_df = pd.DataFrame(
             results,
-            columns=['run_id', 'n_neighbors', 'n_components', 'min_cluster_size', 'min_samples', 'label_count', 'cost']
+            columns=['run_id', 'n_neighbors', 'n_components', 'min_cluster_size', 'min_samples', 'min_dist', 'label_count', 'cost']
         ).sort_values(by="cost", ascending=True)
 
         # Obtener la mejor combinación de hiperparámetros
@@ -227,18 +397,56 @@ class ClusteringManager:
             "n_neighbors": int(best_row["n_neighbors"]),
             "n_components": int(best_row["n_components"]),
             "min_cluster_size": int(best_row["min_cluster_size"]),
-            "min_samples": int(best_row["min_samples"])
+            "min_samples": int(best_row["min_samples"]),
+            "min_dist": float(best_row["min_dist"])
         }
 
         # Entrenar modelos UMAP y HDBSCAN con los mejores parámetros y guardar
         umap_model = None
         hdbscan_model = None
+        umap_embeddings = None
+        
+        # Calcular DBCV para los mejores parámetros
+        best_clusters = self.generate_clusters(
+            embeddings, 
+            best_params['n_neighbors'], 
+            best_params['n_components'], 
+            best_params['min_cluster_size'], 
+            best_params['min_samples'],
+            best_params['min_dist']
+        )
+        
+        # Obtener embeddings UMAP para DBCV
+        temp_umap = umap.UMAP(
+            n_neighbors=best_params['n_neighbors'],
+            n_components=best_params['n_components'],
+            min_dist=best_params['min_dist'],
+            metric='cosine',
+            random_state=self.random_state,
+            n_jobs=-1
+        ).fit_transform(embeddings)
+        
+        dbcv_score = self._calculate_dbcv(temp_umap, best_clusters.labels_)
+        print(f"DBCV Score para mejores parámetros: {dbcv_score}")
+        
+        # Calcular estadísticas para guardar
+        unique_labels = np.unique(best_clusters.labels_)
+        n_clusters = len(unique_labels[unique_labels >= 0])
+        noise_ratio = np.sum(best_clusters.labels_ == -1) / len(best_clusters.labels_)
+        
+        # Guardar resultados DBCV en CSV
+        self._save_dbcv_results('random_search', best_params, dbcv_score, n_clusters, noise_ratio, modelos_dir)
+        
+        # Agregar DBCV al DataFrame de resultados
+        result_df['dbcv_score'] = None
+        result_df.iloc[0, result_df.columns.get_loc('dbcv_score')] = dbcv_score
+        
         if save_models:
             os.makedirs(modelos_dir, exist_ok=True)
             umap_model = umap.UMAP(
                 n_neighbors=best_params['n_neighbors'],
                 n_components=best_params['n_components'],
-                min_dist=0.0,
+                min_dist=best_params['min_dist'],
                 metric='cosine',
                 random_state=self.random_state,
                 n_jobs=-1
@@ -288,6 +496,9 @@ class ClusteringManager:
         # Generar visualización del clustering (reutilizando modelos si están disponibles)
         self._generate_clustering_visualization(embeddings, best_params, "random", modelos_dir, umap_model, hdbscan_model)
         
+        # Crear archivo consolidado de resultados DBCV
+        self._save_consolidated_dbcv_results(modelos_dir)
+        
         return result_df, best_params
             # return result_df.sort_values(by='cost')
     
@@ -306,7 +517,8 @@ class ClusteringManager:
                                     n_neighbors=params['n_neighbors'],
                                     n_components=params['n_components'],
                                     min_cluster_size=params['min_cluster_size'],
-                                    min_samples=params.get('min_samples', 10))
+                                    min_samples=params.get('min_samples', 10),
+                                    min_dist=params.get('min_dist', 0.0))
 
         label_count, cost = self.score_clusters(clusters, prob_threshold=0.05)
 
@@ -373,6 +585,40 @@ class ClusteringManager:
             results.append(params)
         results_df = pd.DataFrame(results).sort_values(by='loss')
 
+        # Calcular DBCV para los mejores parámetros
+        best_clusters_for_dbcv = self.generate_clusters(
+            embeddings,
+            n_neighbors=best_params['n_neighbors'],
+            n_components=best_params['n_components'],
+            min_cluster_size=best_params['min_cluster_size'],
+            min_samples=best_params.get('min_samples', 10)
+        )
+        
+        # Obtener embeddings UMAP para DBCV
+        temp_umap_bayes = umap.UMAP(
+            n_neighbors=best_params['n_neighbors'],
+            n_components=best_params['n_components'],
+            metric='cosine',
+            min_dist=best_params.get('min_dist', 0.0),
+            random_state=self.random_state, 
+            n_jobs=-1
+        ).fit_transform(embeddings)
+        
+        dbcv_score = self._calculate_dbcv(temp_umap_bayes, best_clusters_for_dbcv.labels_)
+        print(f"DBCV Score para mejores parámetros bayesianos: {dbcv_score}")
+        
+        # Calcular estadísticas para guardar
+        unique_labels = np.unique(best_clusters_for_dbcv.labels_)
+        n_clusters = len(unique_labels[unique_labels >= 0])
+        noise_ratio = np.sum(best_clusters_for_dbcv.labels_ == -1) / len(best_clusters_for_dbcv.labels_)
+        
+        # Guardar resultados DBCV en CSV
+        self._save_dbcv_results('bayesian_search', best_params, dbcv_score, n_clusters, noise_ratio, modelos_dir)
+        
+        # Agregar DBCV al DataFrame de resultados (solo para el mejor resultado)
+        results_df['dbcv_score'] = None
+        results_df.iloc[0, results_df.columns.get_loc('dbcv_score')] = dbcv_score
+
         if csv_path:
             results_df.to_csv(csv_path, index=False)
             print(f"Resultados de la búsqueda bayesiana guardados en {csv_path}")
@@ -386,7 +632,7 @@ class ClusteringManager:
                 n_neighbors=best_params['n_neighbors'],
                 n_components=best_params['n_components'],
                 metric='cosine',
-                min_dist=0.0,
+                min_dist=best_params.get('min_dist', 0.0),
                 random_state=self.random_state, 
                 n_jobs=-1
             ).fit(embeddings)
@@ -443,6 +689,9 @@ class ClusteringManager:
         
         # Generar visualización del clustering (reutilizando modelos si están disponibles)
         self._generate_clustering_visualization(embeddings, best_params, "bayesian", modelos_dir, umap_model, hdbscan_model)
+
+        # Crear archivo consolidado de resultados DBCV
+        self._save_consolidated_dbcv_results(modelos_dir)
 
         return best_params, best_clusters, trials
     
@@ -530,6 +779,13 @@ class ClusteringManager:
         # Combinar mejores parámetros para compatibilidad
         combined_best_params = {**best_umap_params, **best_hdbscan_params}
         
+        # Calcular DBCV con los mejores parámetros
+        dbcv_score = self._calculate_dbcv(umap_embeddings, final_labels)
+        print(f"DBCV Score para Grid Search: {dbcv_score}")
+        
+        # Guardar resultados DBCV en CSV
+        self._save_dbcv_results('separate_grid_search', combined_best_params, dbcv_score, n_clusters, n_noise / len(final_labels), modelos_dir)
+        
         # Guardar modelos si se solicita
         if save_models:
             os.makedirs(modelos_dir, exist_ok=True)
@@ -563,6 +819,9 @@ class ClusteringManager:
         self._generate_clustering_visualization(embeddings, combined_best_params, "separate_grid", modelos_dir, 
                                                best_umap_model.umap_model_, best_hdbscan_model.hdbscan_model_)
         
+        # Crear archivo consolidado de resultados DBCV
+        self._save_consolidated_dbcv_results(modelos_dir)
+        
         # Crear DataFrame de resultados para compatibilidad
         result_df = pd.DataFrame([{
             'run_id': 0,
@@ -571,7 +830,8 @@ class ClusteringManager:
             'min_cluster_size': combined_best_params['min_cluster_size'],
             'min_samples': combined_best_params['min_samples'],
             'label_count': n_clusters,
-            'cost': n_noise / len(final_labels)  # Usar proporción de ruido como costo
+            'cost': n_noise / len(final_labels),  # Usar proporción de ruido como costo
+            'dbcv_score': dbcv_score
         }])
         
         return result_df, combined_best_params

@@ -1,6 +1,6 @@
 import pandas as pd
 from Modules.model_manager import EmbeddingModelManager
-from hyperopt import hp
+# from hyperopt import hp
 import time
 import pickle
 import os
