@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # Servicio principal - FastAPI
+  jcmg-embedding-api:
+    build: .
+    container_name: jcmg-embedding-api
+    ports:
+      - "8000:8000"
+    volumes:
+      # Montar directorio de salida para persistir los embeddings generados
+      - ./test:/app/test
+      # Montar datos de entrada
+      - ./data:/app/data:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python EmbeddingGenerator/main.py
+
+  # Servicio para generar embeddings via CLI (para compatibilidad)
+  jcmg-embedding-generator:
+    build: .
+    container_name: jcmg-embedding-gen
+    volumes:
+      - ./test:/app/test
+      - ./data:/app/data:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python generate_embedding.py --modelo st1
+    profiles: ["cli"]
+    
+  # Servicios para generar embeddings con diferentes modelos via CLI
+  embedding-use:
+    build: .
+    container_name: jcmg-embedding-use
+    volumes:
+      - ./test:/app/test
+      - ./data:/app/data:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python generate_embedding.py --modelo use
+    profiles: ["cli", "use"]
+    
+  embedding-st2:
+    build: .
+    container_name: jcmg-embedding-st2
+    volumes:
+      - ./test:/app/test
+      - ./data:/app/data:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python generate_embedding.py --modelo st2
+    profiles: ["cli", "st2"]
+    
+  embedding-st3:
+    build: .
+    container_name: jcmg-embedding-st3
+    volumes:
+      - ./test:/app/test
+      - ./data:/app/data:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python generate_embedding.py --modelo st3
+    profiles: ["cli", "st3"]
