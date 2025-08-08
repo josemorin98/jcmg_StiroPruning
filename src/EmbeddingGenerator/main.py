@@ -15,6 +15,8 @@ import uvicorn
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from Modules.model_manager import EmbeddingModelManager
+from Modules.predict_vector import PredictVector
+from Modules.classification_manager import ClassificationManager
 
 # Configuración
 app = FastAPI(
@@ -37,16 +39,36 @@ modelos_cargados = {}
 path_test = "test"
 
 # Modelos Pydantic
-class EmbeddingRequest(BaseModel):
-    textos: List[str]
+class PredictRequest(BaseModel):
+    texto: str
     modelo: str = "st1"
-    guardar: bool = False
+    params: str = "bayesian"
+    use_adjusted: bool = False
+    embeddings_labeled_path: Optional[str] = None
 
-class EmbeddingResponse(BaseModel):
-    embeddings: List[List[float]]
-    dimensiones: int
+class PredictResponse(BaseModel):
+    predicted_label: int
+    similarity_score: float
+    confidence: Optional[float] = None
+    embedding_dimensions: int
     modelo_usado: str
-    tiempo_procesamiento: float
+    existe_exacto: bool
+    idx_relativo: Optional[int] = None
+    idx_global: Optional[int] = None
+    similares_en_grupo: List[Dict[str, Any]] = []
+
+class TrainClassifierRequest(BaseModel):
+    embeddings_labeled_path: str
+    modelo: str = "st1"
+    params: str = "bayesian"
+    use_adjusted: bool = False
+
+class TrainClassifierResponse(BaseModel):
+    best_model: str
+    best_score: float
+    training_time: float
+    num_classes: int
+    num_samples: int
 
 class GenerarDatasetRequest(BaseModel):
     archivo_csv: str = "../data/sample.csv"

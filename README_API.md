@@ -1,28 +1,15 @@
-# JCMG Embedding Generator API
+# JCMG Embedding & Clustering System
 
-API REST construida con FastAPI para generar embeddings usando diferentes modelos de transformers.
+Sistema completo para generar embeddings, realizar clustering y predicción de grupos usando diferentes modelos de transformers.
 
-## 🚀 Inicio Rápido
+## 🚀 Características Principales
 
-### Con Docker (Recomendado)
-
-```bash
-# Construir y ejecutar la API
-docker-compose up --build
-
-# La API estará disponible en: http://localhost:8000
-```
-
-### Instalación Local
-
-```bash
-# Instalar dependencias
-pip install -r requirements.txt
-
-# Ejecutar la API
-cd src/EmbeddingGenerator
-python main.py
-```
+- **Generación de Embeddings**: Soporte para múltiples modelos (USE, Sentence Transformers)
+- **Clustering Inteligente**: UMAP + HDBSCAN con optimización de hiperparámetros
+- **Predicción por Similitud**: Búsqueda directa en embeddings originales
+- **Clasificación**: Modelos de ML para predicción de grupos
+- **Métricas DBCV**: Validación de calidad de clustering
+- **Trazabilidad**: Mapeo de resultados a vectores originales
 
 ## 📊 Modelos Disponibles
 
@@ -31,182 +18,229 @@ python main.py
 - **st2**: all-MiniLM-L6-v2
 - **st3**: paraphrase-mpnet-base-v2
 
-## 🔌 Endpoints de la API
+## � Instalación
 
-### GET `/`
-Estado general de la API
-
-### GET `/modelos`
-Lista todos los modelos disponibles y cargados
-
-### POST `/cargar-modelo/{nombre_modelo}`
-Carga un modelo específico en memoria
-
-### POST `/generar-embeddings`
-Genera embeddings para textos específicos
-
-**Ejemplo de request:**
-```json
-{
-  "textos": ["Mexico.Total 2012 Mujeres.>65", "USA.California 2020 Hombres.25-30"],
-  "modelo": "st1",
-  "guardar": false
-}
-```
-
-### POST `/generar-dataset`
-Procesa un dataset completo (en background)
-
-**Ejemplo de request:**
-```json
-{
-  "archivo_csv": "../data/sample.csv",
-  "modelo": "st1",
-  "columnas": ["Spatial", "Temporal", "Interest"],
-  "incluir_reference_observation": true
-}
-```
-
-### GET `/descargar-embeddings/{modelo}`
-Descarga el archivo CSV con embeddings generados
-
-### DELETE `/limpiar-modelos`
-Limpia todos los modelos de la memoria
-
-## 🐳 Uso con Docker
-
-### API (Recomendado)
 ```bash
-# Ejecutar API
-docker-compose up
+# Clonar repositorio
+git clone <repository-url>
+cd jcmg_StiroPruning
 
-# Acceder a la documentación interactiva
-# http://localhost:8000/docs
+# Instalar dependencias
+pip install -r requirements.txt
 ```
 
-### CLI (Compatibilidad)
+## 🎯 Uso Principal
+
+### 1. Generar Embeddings
+
 ```bash
-# Ejecutar generación por CLI
-docker-compose --profile cli up embedding-st1
+# Generar embeddings con modelo específico
+cd src
+python generate_embedding.py --modelo st1
 
-# Ejecutar todos los modelos
-docker-compose --profile cli up embedding-use embedding-st2 embedding-st3
+# Generar con diferentes modelos
+python generate_embedding.py --modelo use
+python generate_embedding.py --modelo st2
+python generate_embedding.py --modelo st3
 ```
 
-## 📝 Ejemplos de Uso
+### 2. Realizar Clustering
 
-### Generar embeddings simples
-```python
-import requests
-
-# Cargar modelo
-response = requests.post("http://localhost:8000/cargar-modelo/st1")
-
-# Generar embeddings
-data = {
-    "textos": ["Mexico.Total 2012 Mujeres.>65"],
-    "modelo": "st1"
-}
-response = requests.post("http://localhost:8000/generar-embeddings", json=data)
-embeddings = response.json()["embeddings"]
+```bash
+# Búsqueda de hiperparámetros con diferentes métodos
+cd src
+python find_hyperparams.py --modelo st1 --method bayesian
+python find_hyperparams.py --modelo st1 --method random
+python find_hyperparams.py --modelo st1 --method separate_grid
 ```
 
-### Procesar dataset completo
-```python
-import requests
+### 3. Predicción de Grupos
 
-data = {
-    "archivo_csv": "../data/sample.csv",
-    "modelo": "st1",
-    "columnas": ["Spatial", "Temporal", "Interest"]
-}
-response = requests.post("http://localhost:8000/generar-dataset", json=data)
+```bash
+# Predicción usando clasificadores ML
+python predict.py --modelo st1 --params bayesian
+
+# Con embeddings ajustados
+python predict.py --modelo st1 --params bayesian --use_adjusted
 ```
 
-## 🔧 Configuración
+## 🔍 Funcionalidades Avanzadas
 
-### Variables de Entorno
-- `PYTHONUNBUFFERED=1`: Para logs en tiempo real
+### **Predicción por Similitud Directa**
+- Búsqueda en embeddings originales sin transformaciones UMAP
+- Comparación directa con similitud coseno
+- Trazabilidad completa hasta vectores originales del CSV
 
-### Volúmenes Docker
-- `./test:/app/test`: Directorio de salida
-- `./data:/app/data:ro`: Datos de entrada (solo lectura)
+### **Optimización de Hiperparámetros**
+- **Random Search**: Exploración aleatoria del espacio de parámetros
+- **Bayesian Search**: Optimización inteligente con Hyperopt
+- **Grid Search**: Búsqueda exhaustiva en grilla
 
-## 📚 Documentación API
+### **Métricas de Calidad**
+- **DBCV**: Density-Based Cluster Validation
+- **Silhouette Score**: Cohesión y separación de clusters
+- **Estadísticas de Clustering**: Distribución y características
 
-Una vez ejecutando, visita:
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+### **Múltiples Enfoques de Predicción**
+1. **Clasificadores ML**: Random Forest, MLP, XGBoost
+2. **Similitud Directa**: Búsqueda en espacio original
+3. **Búsqueda por Grupo**: Similares dentro de clusters específicos
 
-## 🛠️ Desarrollo
+## � Estructura del Proyecto
 
-### Estructura del Proyecto
 ```
 src/
-├── EmbeddingGenerator/
-│   └── main.py              # FastAPI app
+├── generate_embedding.py       # Generación de embeddings
+├── find_hyperparams.py        # Optimización de clustering
+├── predict.py                 # Predicción de grupos
 ├── Modules/
-│   └── model_manager.py     # Gestión de modelos
-├── generate_embedding.py    # Script CLI original
-└── ...
+│   ├── model_manager.py       # Gestión de modelos de embeddings
+│   ├── clustering_manager.py  # Clustering UMAP + HDBSCAN
+│   ├── classification_manager.py # Clasificadores ML
+│   ├── predict_vector.py      # Predicción por similitud
+│   ├── estimators.py          # Estimadores personalizados
+│   └── grid_search.py         # Búsqueda en grilla
+data/
+├── sample.csv                 # Dataset de entrada
+test/
+├── embeddings/               # Embeddings generados
+├── Modelos_{modelo}/        # Modelos y resultados de clustering
+│   ├── embeddings_originales_labeled_{method}.csv
+│   ├── embeddings_umap_labeled_{method}.csv
+│   ├── umap_{method}.pkl
+│   ├── hdbscan_{method}.pkl
+│   └── dbcv_results_{method}.csv
 ```
 
-### Ejecutar en Desarrollo
+## 🔄 Flujo de Trabajo Completo
+
+### 1. **Preparación de Datos**
 ```bash
-cd src/EmbeddingGenerator
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# El CSV debe contener columnas: Spatial, Temporal, Interest, Reference, Observation
+# Ejemplo de fila: Mexico.Total, 2012, Mujeres.>65, 0.139, 0.139
 ```
 
-## 🔍 Monitoreo
-
-### Logs
+### 2. **Generación de Embeddings**
 ```bash
-# Ver logs de la API
-docker-compose logs -f jcmg-embedding-api
-
-# Ver logs de procesamiento CLI
-docker-compose --profile cli logs -f
+python generate_embedding.py --modelo st1
+# Genera: test/embeddings/st1/st1_complete.csv
 ```
 
-### Estado
+### 3. **Clustering y Optimización**
 ```bash
-# Estado de la API
-curl http://localhost:8000/
-
-# Modelos cargados
-curl http://localhost:8000/modelos
+python find_hyperparams.py --modelo st1 --method bayesian
+# Genera: test/Modelos_st1/embeddings_originales_labeled_bayesian.csv
+#         test/Modelos_st1/umap_bayesian.pkl
+#         test/Modelos_st1/hdbscan_bayesian.pkl
+#         test/Modelos_st1/dbcv_results_bayesian.csv
 ```
 
-## 📊 Archivos de Salida
+### 4. **Predicción y Análisis**
+```bash
+python predict.py --modelo st1 --params bayesian
+# Muestra:
+# - Grupo predicho
+# - Similares en el grupo
+# - Vectores originales correspondientes
+# - Métricas de confianza
+```
 
-Los embeddings se guardan en:
-- `test/embeddings/{modelo}/{modelo}_complete.csv`
-- `test/embeddings/times_embeddings.csv` (tiempos de procesamiento)
+## � Métricas y Resultados
 
-## ⚡ Performance Tips
+### **Archivos de Salida:**
 
-1. **Precarga modelos**: Usa `/cargar-modelo/{modelo}` antes de generar embeddings
-2. **Procesamiento en batch**: Envía múltiples textos en una sola petición
-3. **Background tasks**: Usa `/generar-dataset` para datasets grandes
-4. **Limpieza de memoria**: Usa `/limpiar-modelos` cuando cambies de modelo
+1. **Embeddings Etiquetados**: `embeddings_originales_labeled_{method}.csv`
+   - Embeddings + etiquetas de clustering
+   - Base para predicción por similitud
+
+2. **Modelos Entrenados**: `umap_{method}.pkl`, `hdbscan_{method}.pkl`
+   - Modelos UMAP y HDBSCAN optimizados
+   - Reproducibilidad de resultados
+
+3. **Métricas DBCV**: `dbcv_results_{method}.csv`
+   - Validación de calidad de clustering
+   - Comparación entre métodos
+
+4. **Tiempos de Ejecución**: `times_*.csv`
+   - Rendimiento por método
+   - Optimización de recursos
+
+## 🎯 Casos de Uso
+
+### **Predicción de Nuevos Vectores**
+```python
+# Vector ejemplo
+vector_input = ["Mexico.Total", "2013", "Mujeres.>65", "0.139", "0.139"]
+
+# El sistema automáticamente:
+# 1. Genera embedding del vector
+# 2. Encuentra grupo más similar
+# 3. Muestra vectores originales similares
+# 4. Proporciona métricas de confianza
+```
+
+### **Análisis de Similitud**
+- Búsqueda exacta en grupos específicos
+- Top-N más similares dentro de clusters
+- Trazabilidad hasta datos originales
+- Métricas de distancia y similitud
+
+### **Validación de Clustering**
+- Métricas DBCV por método
+- Comparación de hiperparámetros
+- Análisis de distribución de clusters
+- Detección de outliers/ruido
+
+## 🔧 Configuración Avanzada
+
+### **Embeddings Ajustados**
+```bash
+# Usar solo columnas Spatial, Temporal, Interest
+python generate_embedding.py --modelo st1
+python predict.py --modelo st1 --use_adjusted
+```
+
+### **Diferentes Métodos de Clustering**
+```bash
+# Bayesian optimization (recomendado)
+python find_hyperparams.py --method bayesian
+
+# Random search (rápido)
+python find_hyperparams.py --method random
+
+# Grid search (exhaustivo)
+python find_hyperparams.py --method separate_grid
+```
 
 ## 🚨 Troubleshooting
 
-### Problemas Comunes
+### **Problemas Comunes**
 
-**Puerto ocupado:**
-```bash
-# Cambiar puerto en docker-compose.yml
-ports:
-  - "8001:8000"  # Usar puerto 8001 externamente
-```
-
-**Memoria insuficiente:**
-```bash
-# Limpiar modelos cargados
-curl -X DELETE http://localhost:8000/limpiar-modelos
-```
+**Error de dimensionalidad:**
+- Verificar que el vector de entrada coincida con el modo (ajustado/normal)
+- 5 elementos para modo normal, 3 para ajustado
 
 **Archivos no encontrados:**
-- Verificar que `data/sample.csv` existe
-- Verificar permisos de escritura en `test/`
+- Verificar que se hayan generado embeddings primero
+- Verificar que exista el CSV original en `data/sample.csv`
+
+**Memoria insuficiente:**
+- Usar modelos más pequeños (st2 en lugar de st1)
+- Reducir tamaño del dataset
+- Usar search methods más eficientes
+
+## 📊 Rendimiento
+
+- **st2 (MiniLM)**: Más rápido, menor precisión
+- **st1 (MPNet)**: Balance óptimo velocidad/precisión
+- **use**: Buena precisión, requiere más memoria
+- **st3 (Paraphrase)**: Mejor para similitud semántica
+
+## 🔄 Actualizaciones Recientes
+
+- ✅ Predicción directa por similitud (sin UMAP)
+- ✅ Trazabilidad a vectores originales del CSV
+- ✅ Métricas DBCV integradas
+- ✅ Soporte para embeddings ajustados
+- ✅ Clasificadores ML múltiples
+- ✅ Búsqueda optimizada de hiperparámetros
