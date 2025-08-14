@@ -1,0 +1,138 @@
+Usando modelo: st1
+Tipo de parámetros: separate_grid
+Embeddings ajustados: True
+
+=== VECTOR DE ENTRADA ===
+Vector entrada: ['zacatecas.benito juarez', '2017', 'c80.mujeres.total', '1k', '0.4739336492890995']
+Vector en sentencia: zacatecas.benito_juarez 2017 c80.mujeres.total
+
+=== GENERACIÓN DE EMBEDDING ===
+Cargando modelo de embeddings: st1
+Creando carpeta de st1
+Embedding generado con dimensiones: (768,)
+
+=== CLASIFICACIÓN ===
+Cargando datos desde: ../test/Modelos_st1_adjusted
+Cargando embeddings origianles etiquetados desde: ../test/Modelos_st1_adjusted/embeddings_originales_labeled_separate_grid.csv
+Embeddings cargados desde con forma (41910, 769)
+Columna etiqueta al final label
+Datos cargados: 41910 muestras, 84 clases únicas
+----- Entrenando clasificadores -----
+Entrenando random_forest...
+random_forest - CV Score: 0.9823 (+/- 0.0008)
+Entrenando mlp...
+mlp - CV Score: 0.9893 (+/- 0.0003)
+
+Mejor modelo: mlp (Score: 0.9893)
+Tiempo de entrenamiento: 662.87 segundos
+
+=== RESULTADO DE PREDICCIÓN ===
+Mejor modelo: mlp
+Grupo predicho: -1
+Probabilidad máxima: 0.9826
+Probabilidades por clase:
+ label  probability
+    -1 9.826333e-01
+    82 1.463631e-02
+    56 2.647590e-03
+    15 4.584335e-05
+    60 1.217078e-05
+    22 6.285288e-06
+     6 5.561549e-06
+    44 4.437980e-06
+    52 4.306606e-06
+    31 1.986057e-06
+    37 1.834685e-06
+    81 2.050280e-07
+    49 6.063250e-08
+    73 3.621681e-08
+    43 2.910010e-08
+    10 1.246144e-08
+    16 6.130735e-09
+     7 3.863187e-09
+    48 2.171836e-09
+     1 1.719505e-09
+     8 1.549266e-09
+    58 1.528510e-09
+    24 1.398608e-09
+    23 1.528935e-10
+    17 1.298176e-10
+    19 7.999748e-11
+    29 7.743132e-11
+    69 5.644846e-11
+    28 3.022666e-11
+    55 1.837297e-11
+    75 1.803637e-11
+     5 7.216385e-12
+    77 6.533980e-12
+     4 6.398603e-12
+    53 2.755157e-12
+    80 2.566742e-12
+    25 2.368496e-12
+    61 2.118844e-12
+    14 1.268044e-12
+    35 7.625861e-13
+    45 7.248668e-13
+    67 6.478064e-13
+    32 6.213743e-13
+    57 3.737815e-13
+    33 3.500437e-13
+    42 1.843452e-13
+    78 1.785018e-13
+    34 1.393850e-13
+     0 1.359847e-13
+    20 6.556510e-14
+    13 4.953861e-14
+    26 2.498492e-14
+    39 2.219993e-14
+    12 1.933403e-14
+    41 1.341296e-14
+     9 8.125039e-15
+    51 5.795188e-15
+    59 4.645878e-15
+    30 3.906330e-15
+    18 3.799665e-15
+    72 3.410280e-15
+    36 2.641731e-15
+    54 2.619571e-15
+    62 1.691202e-15
+    40 1.086646e-15
+    74 7.104714e-16
+    27 6.938377e-16
+    66 4.773821e-16
+    79 2.448143e-16
+    46 1.886969e-16
+    11 1.664229e-16
+    21 1.486299e-16
+    47 5.492999e-17
+    76 3.119727e-17
+    50 8.328778e-18
+    63 5.956441e-18
+     3 4.652180e-18
+    68 2.702180e-18
+    71 2.673846e-18
+     2 1.739941e-18
+    64 3.909892e-20
+    65 1.254622e-20
+    70 6.207077e-21
+    38 4.329629e-22
+
+=== BÚSQUEDA EN GRUPO -1 ===
+El embedding ya existe en el grupo -1
+Índice relativo en el grupo: 1
+Índice global en el dataset: 10
+
+Vector original encontrado:
+   Spatial: zacatecas.benito juarez
+   Temporal: 2017
+   Interest: c80.mujeres.total
+   Reference: 1k
+   Observation: 0.4739336492890995
+Error al cargar CSV original: 'Spatial'
+
+=== RESUMEN ===
+Vector de entrada procesado exitosamente
+Modelo de embeddings: st1
+Modelo de clasificación: mlp
+Grupo predicho: -1
+Confianza: 0.9826

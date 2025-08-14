@@ -8,7 +8,7 @@ import numpy as np
 import time
 
 class EmbeddingModelManager:
-    def __init__(self, save_dir="../test"):
+    def __init__(self, save_dir="test"):
         """
         Inicializa el gestor de modelos de embeddings.
 
@@ -42,7 +42,7 @@ class EmbeddingModelManager:
         else:
             raise ValueError("Tipo de modelo no soportado")
 
-    def embed(self, name, sentences, save=True, save_csv=True):
+    def embed(self, name, sentences, save_csv=True):
         """
         Genera los embeddings para una lista de sentencias usando el modelo especificado.
         Guarda los embeddings en una subcarpeta con el nombre del modelo si 'save' es True.
@@ -62,17 +62,19 @@ class EmbeddingModelManager:
             embeddings = np.array(model(sentences))
         else:
             embeddings = model.encode(sentences)
-        if save or save_csv:
+        if save_csv:
             print(f'Creando carpeta de {name}')
             model_dir = os.path.join(self.save_dir, name)
             os.makedirs(model_dir, exist_ok=True)
-        if save:
-            save_path = os.path.join(model_dir, f"{name}.npy")
-            np.save(save_path, embeddings)
         if save_csv:
+            save_path = os.path.join("../",model_dir, f"{name}.npy")
+            print(f'Guardando embeddings en {save_path}')
+            np.save(save_path, embeddings)
+            
             save_csv_path = os.path.join(model_dir, f"{name}.csv")
             # Si los embeddings son 2D, guarda como DataFrame
             import pandas as pd
             df = pd.DataFrame(embeddings)
+            print(f'Guardando embeddings en {save_csv_path}')
             df.to_csv(save_csv_path, index=False)
         return embeddings

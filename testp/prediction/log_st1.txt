@@ -1,0 +1,137 @@
+Usando modelo: st1
+Tipo de parámetros: separate_grid
+Embeddings ajustados: True
+
+=== VECTOR DE ENTRADA ===
+Vector entrada: ['tabasco.total', '20023', 'c64.hombres.total', '100k', '3.594174562']
+Vector en sentencia: tabasco.total 20023 c64.hombres.total
+
+=== GENERACIÓN DE EMBEDDING ===
+Cargando modelo de embeddings: st1
+Creando carpeta de st1
+Embedding generado con dimensiones: (768,)
+
+=== CLASIFICACIÓN ===
+Cargando datos desde: ../test/Modelos_st1_adjusted
+Cargando embeddings origianles etiquetados desde: ../test/Modelos_st1_adjusted/embeddings_originales_labeled_separate_grid.csv
+Embeddings cargados desde con forma (41910, 769)
+Columna etiqueta al final label
+Datos cargados: 41910 muestras, 84 clases únicas
+----- Entrenando clasificadores -----
+Entrenando random_forest...
+random_forest - CV Score: 0.9823 (+/- 0.0008)
+Entrenando mlp...
+mlp - CV Score: 0.9893 (+/- 0.0003)
+
+Mejor modelo: mlp (Score: 0.9893)
+Tiempo de entrenamiento: 617.35 segundos
+
+=== RESULTADO DE PREDICCIÓN ===
+Mejor modelo: mlp
+Grupo predicho: 34
+Probabilidad máxima: 1.0000
+Probabilidades por clase:
+ label  probability
+    34 9.999996e-01
+    25 1.248751e-07
+    23 8.878037e-08
+    39 8.126195e-08
+    32 5.741832e-08
+    30 1.890233e-08
+    17 1.869699e-08
+    29 1.648608e-08
+    -1 1.565988e-08
+    44 6.794842e-09
+     1 4.072561e-09
+    18 2.824915e-10
+    10 8.615466e-11
+    55 8.407847e-11
+    14 3.273018e-11
+     8 1.883376e-11
+    33 1.145985e-11
+    56 8.582921e-12
+    60 7.414772e-12
+    82 5.797705e-12
+     5 5.659264e-12
+    43 4.904173e-12
+    73 2.708086e-12
+    28 2.416862e-12
+    49 1.128424e-12
+    81 8.531384e-13
+    24 3.836439e-13
+     7 3.618860e-13
+    15 1.325925e-13
+    19 9.370243e-14
+    58 8.837521e-14
+     0 3.398915e-14
+     6 2.600825e-14
+    16 8.161721e-15
+     4 2.657360e-15
+    31 2.415138e-15
+    48 1.159277e-15
+    36 6.649895e-16
+    20 8.396954e-17
+     9 6.713296e-17
+    57 4.426340e-17
+    22 3.965586e-17
+    76 1.812746e-17
+    37 3.583840e-18
+    67 2.451342e-18
+    35 2.292156e-18
+    13 1.720066e-18
+    77 1.260971e-18
+    72 2.849393e-19
+    64 8.568725e-20
+    11 4.993972e-20
+    12 5.404542e-21
+    52 3.493990e-21
+    80 3.068347e-21
+    45 9.110340e-22
+    26 7.026028e-22
+    40 4.157391e-22
+    59 4.136207e-22
+    41 4.067387e-22
+    61 9.425342e-23
+    27 3.900570e-23
+    51 2.662673e-23
+    42 1.463336e-23
+    21 6.529112e-24
+    46 2.668644e-24
+    62 1.936261e-24
+    79 1.895756e-24
+    69 1.819023e-24
+    78 5.162725e-25
+    66 1.511023e-25
+    54 1.270754e-25
+    71 1.629087e-26
+    50 1.196373e-26
+     2 2.089961e-27
+    74 7.857677e-28
+    53 1.759733e-28
+    47 4.217782e-29
+     3 3.235703e-29
+    65 1.747083e-29
+    38 5.015972e-30
+    75 9.344807e-31
+    68 8.689247e-31
+    70 2.272603e-32
+    63 2.224755e-33
+
+=== BÚSQUEDA EN GRUPO 34 ===
+El embedding NO existe en el grupo 34
+Top 10 similares dentro del grupo 34:
+
+Vectores originales correspondientes:
+================================================================================
+
+1. Similitud: 0.9278
+   Índice relativo: 181, Índice global: 13630
+   Vector original:
+Error al cargar CSV original: 'Spatial'
+
+=== RESUMEN ===
+Vector de entrada procesado exitosamente
+Modelo de embeddings: st1
+Modelo de clasificación: mlp
+Grupo predicho: 34
+Confianza: 1.0000

@@ -3,17 +3,13 @@ import numpy as np
 import pandas as pd
 from Modules.predict_vector import PredictVector
 from Modules.classification_manager import ClassificationManager
-import pickle
-from sklearn.metrics.pairwise import cosine_similarity
-from Modules.model_manager import EmbeddingModelManager
-import time 
 
 def main():
     parser = argparse.ArgumentParser(description="Predicción de grupo usando clasificación para un vector de entrada.")
     parser.add_argument("--modelo", type=str, choices=["use", "st1", "st2", "st3"], help="Modelo de embeddings a usar", default="st1")
     parser.add_argument("--params", type=str, choices=["random", "bayesian", "separate_grid"], help="Tipo de parámetros de clustering usados", default="bayesian")
-    parser.add_argument("--embeddings_path", type=str, default="../test/embeddings", help="Ruta al archivo .npy de embeddings")
-    parser.add_argument("--models_dir", type=str, default="../test/Modelos", help="Directorio donde están los modelos")
+    parser.add_argument("--embeddings_path", type=str, default="test/Embeddings", help="Ruta al archivo .npy de embeddings")
+    parser.add_argument("--models_dir", type=str, default="test/Modelos", help="Directorio donde están los modelos")
     parser.add_argument("--use_adjusted", action="store_true", help="Usar embeddings ajustados con columnas spatial, temporal e interest")
     args = parser.parse_args()
     
@@ -27,7 +23,10 @@ def main():
     
     # 1. Vector de entrada (mismo formato que antes)
     print("\n=== VECTOR DE ENTRADA ===")
-    vector_input = ["Mexico.Total", "2012", "Mujeres.>65", "0.139", "0.139"]
+    # vector_input = ["Mexico.Total", "2012", "Mujeres.>65", "0.139", "0.139"]   # PRRUEBA 1
+    vector_input = ["zacatecas.benito juarez", "2017", "c80.mujeres.total",	"1k", "0.4739336492890995"]  # PRUEBA 2 Exacta
+    vector_input = ["tabasco.total", "20023", "c64.hombres.total", "100k", "3.594174562"]  # PRUEBA 2.1 No Exacta
+
     print("Vector entrada:", vector_input)
     if args.use_adjusted:
         # Para embeddings ajustados, usar formato con spatial, temporal e interest
@@ -105,16 +104,23 @@ def main():
         print(f"Probabilidad máxima: {max_prob:.4f}")
         
         # Mostrar probabilidades de todas las clases
-        unique_labels = np.unique(labels)
         print("Probabilidades por clase:")
-        for i, label in enumerate(unique_labels):
-            print(f"  Clase {label}: {probabilities[0][i]:.4f}")
-
+        
+        unique_labels = np.unique(labels)
+        probabilities = probabilities[0].tolist()
+        
+        df_probabilities = pd.DataFrame({
+            'label': unique_labels,
+            'probability': probabilities
+        }).sort_values(by='probability', ascending=False)
+        
+        print(df_probabilities.to_string(index=False))
+        
     # 9. Reutilizar funciones de búsqueda exacta o top 10 más similar
     print(f"\n=== BÚSQUEDA EN GRUPO {predicted_label} ===")
     
     # Verificar si el embedding ya existe exactamente en el grupo
-    existe, idx_relativo, idx_global = predictor.existe_en_grupo_por_etiqueta(
+    existe, idx_relativo, idx_global, grupo_existente = predictor.existe_en_grupo_por_etiqueta(
         embedding, embeddings_originales_labeled_path, predicted_label
     )
     
@@ -125,15 +131,15 @@ def main():
         
         # Cargar el CSV original para mostrar el vector correspondiente
         try:
-            csv_original = pd.read_csv("../data/sample.csv")
+            csv_original = pd.read_csv("../data/sample_v2.csv")
             if idx_global < len(csv_original):
                 vector_original = csv_original.iloc[idx_global]
                 print(f"\nVector original encontrado:")
-                print(f"   Spatial: {vector_original['Spatial']}")
-                print(f"   Temporal: {vector_original['Temporal']}")
-                print(f"   Interest: {vector_original['Interest']}")
-                print(f"   Reference: {vector_original['Reference']}")
-                print(f"   Observation: {vector_original['Observation']}")
+                print(f"   Spatial: {vector_original['spatial']}")
+                print(f"   Temporal: {vector_original['temporal']}")
+                print(f"   Interest: {vector_original['interest']}")
+                print(f"   Reference: {vector_original['reference']}")
+                print(f"   Observation: {vector_original['observation']}")
                 
                 # Mostrar la sentencia como se procesaría
                 if args.use_adjusted:
@@ -149,8 +155,8 @@ def main():
         print(f"El embedding NO existe en el grupo {predicted_label}")
         
         # Si es outlier/ruido, buscar los 10 más similares en todos los embeddings
-        if predicted_label == -1:
-            print("Grupo predicho es ruido (-1). Buscando los 10 más similares en todos los embeddings...")
+        if predicted_label == False:
+            print("Grupo predicho es ruido (False). Buscando los 10 más similares en todos los embeddings...")
             # Cargar embeddings originales etiquetados
             
             # Buscar los 10 más similares en todos los embeddings o buscar entre el rudio
@@ -181,16 +187,18 @@ def main():
                 
         else:
             # Buscar similares dentro del grupo predicho
-            top_idx, similarities, idx_global = predictor.buscar_similares_en_grupo_por_etiqueta(
+            top_idx, similarities, idx_global, embeddings_group = predictor.buscar_similares_en_grupo_por_etiqueta(
                 embedding, embeddings_originales_labeled_path, predicted_label, top_n=10
             )
-            
+
+            embeddings_group.to_csv("../data/embeddings_group.csv", index=False)
+
             if len(top_idx) > 0:
                 print(f"Top {len(top_idx)} similares dentro del grupo {predicted_label}:")
                 
                 # Cargar el CSV original para extraer los vectores originales
                 try:
-                    csv_original = pd.read_csv("../data/sample.csv")
+                    csv_original = pd.read_csv("../data/sample_v2.csv")
                     print(f"\nVectores originales correspondientes:")
                     print("="*80)
                     
@@ -202,17 +210,17 @@ def main():
                         if glob_idx < len(csv_original):
                             vector_original = csv_original.iloc[glob_idx]
                             print(f"   Vector original:")
-                            print(f"     Spatial: {vector_original['Spatial']}")
-                            print(f"     Temporal: {vector_original['Temporal']}")
-                            print(f"     Interest: {vector_original['Interest']}")
-                            print(f"     Reference: {vector_original['Reference']}")
-                            print(f"     Observation: {vector_original['Observation']}")
+                            print(f"     Spatial: {vector_original['spatial']}")
+                            print(f"     Temporal: {vector_original['temporal']}")
+                            print(f"     Interest: {vector_original['interest']}")
+                            print(f"     Reference: {vector_original['reference']}")
+                            print(f"     Observation: {vector_original['observation']}")
                             
                             # Mostrar la sentencia como se procesaría
                             if args.use_adjusted:
-                                sentencia_procesada = f"{vector_original['Spatial']} {vector_original['Temporal']} {vector_original['Interest']}"
+                                sentencia_procesada = f"{vector_original['spatial']} {vector_original['temporal']} {vector_original['interest']}"
                             else:
-                                sentencia_procesada = f"{vector_original['Spatial']} {vector_original['Temporal']} {vector_original['Interest']} {vector_original['Reference']} {vector_original['Observation']}"
+                                sentencia_procesada = f"{vector_original['spatial']} {vector_original['temporal']} {vector_original['interest']} {vector_original['reference']} {vector_original['observation']}"
                             print(f"Sentencia procesada: {sentencia_procesada}")
                         else:
                             print(f"Índice global {glob_idx} fuera del rango del CSV original")

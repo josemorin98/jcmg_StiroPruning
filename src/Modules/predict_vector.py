@@ -174,9 +174,9 @@ class PredictVector:
         for idx_relativo, emb_row in enumerate(embeddings_group_valores):
             if np.allclose(embedding_query, emb_row, atol=atol):
                 idx_global = indices_globales[idx_relativo]
-                return True, idx_relativo, idx_global
+                return True, idx_relativo, idx_global, embeddings_group
         
-        return False, None, None
+        return False, None, None, None
 
     def buscar_similares_en_grupo_por_etiqueta(self, embedding, embeddings_labeled_path, grupo_id, top_n=10):
         """
@@ -233,4 +233,4 @@ class PredictVector:
         # Convertir indices_globales a numpy array para poder indexar con top_idx
         indices_globales_array = np.array(indices_globales)
         
-        return top_idx, similarities[top_idx], indices_globales_array[top_idx]
+        return top_idx, similarities[top_idx], indices_globales_array[top_idx], embeddings_group
