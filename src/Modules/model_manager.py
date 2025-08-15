@@ -64,10 +64,10 @@ class EmbeddingModelManager:
             embeddings = model.encode(sentences)
         if save_csv:
             print(f'Creando carpeta de {name}')
-            model_dir = os.path.join(self.save_dir, name)
+            model_dir = os.path.join("../",self.save_dir, name)
             os.makedirs(model_dir, exist_ok=True)
         if save_csv:
-            save_path = os.path.join("../",model_dir, f"{name}.npy")
+            save_path = os.path.join(model_dir, f"{name}.npy")
             print(f'Guardando embeddings en {save_path}')
             np.save(save_path, embeddings)
             

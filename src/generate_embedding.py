@@ -24,13 +24,13 @@ parser.add_argument(
 parser.add_argument(
     "--output_dir",
     type=str,
-    default="test",
+    default="../test",
     help="Directorio donde se guardarán los embeddings generados"
 )
 
 args = parser.parse_args()
 
-path_test  = f"../{args.output_dir}"
+path_test  = f"{args.output_dir}"
 # -------------------------------------------------------------------------------
 # Cargar el dataset de intents
 start_time = time.time()
@@ -64,7 +64,7 @@ print(f"Procesamiento de texto completado en {tiempo_preprocesado:.2f} segundos\
 
 # Crear el administrador de modelos de embeddings
 start_time = time.time()
-manager = EmbeddingModelManager(save_dir=f"{path_test}/embeddings")
+manager = EmbeddingModelManager(save_dir=f"../{path_test}/embeddings")
 # Selección y carga del modelo
 modelos_dict = {
     "use": ("use", "use", "https://tfhub.dev/google/universal-sentence-encoder/4"),

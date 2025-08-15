@@ -14,12 +14,13 @@ class UMAPEstimator(BaseEstimator, TransformerMixin):
     Estimador UMAP compatible con GridSearchCV de scikit-learn.
     """
     
-    def __init__(self, n_neighbors=15, n_components=2, min_dist=0.0, metric='cosine', random_state=42):
+    def __init__(self, n_neighbors=15, n_components=2, min_dist=0.0, metric='cosine', random_state=42, n_jobs=3):
         self.n_neighbors = n_neighbors
         self.n_components = n_components
         self.min_dist = min_dist
         self.metric = metric
         self.random_state = random_state
+        self.n_jobs = n_jobs
         
     def fit(self, X, y=None):
         """Ajusta el modelo UMAP a los datos."""
@@ -29,7 +30,7 @@ class UMAPEstimator(BaseEstimator, TransformerMixin):
             min_dist=self.min_dist,
             metric=self.metric,
             random_state=self.random_state,
-            n_jobs=3
+            n_jobs=self.n_jobs
         ).fit(X)
         return self
     
@@ -124,7 +125,7 @@ class UMAPHDBSCANEstimator(BaseEstimator, ClusterMixin):
             min_dist=0.0,
             metric='cosine',
             random_state=self.random_state,
-            n_jobs=1
+            n_jobs=self.n_jobs
         ).fit(X)
         
         umap_embeddings = self.umap_model_.transform(X)

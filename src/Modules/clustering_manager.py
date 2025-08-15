@@ -27,8 +27,10 @@ class ClusteringManager:
     Clase para gestionar la reducción de dimensionalidad y clustering sobre embeddings.
     Permite realizar búsquedas aleatorias de hiperparámetros y evaluar los resultados.
     """
+    
+    # n_jobs = 3  # Número de procesos paralelos a utilizar
 
-    def __init__(self, random_state=42, model="use"):
+    def __init__(self, random_state=42, model="use", n_jobs=-1):
         """
         Inicializa el gestor de clustering.
 
@@ -38,6 +40,7 @@ class ClusteringManager:
         self.model = model
         if model not in ["use", "st1", "st2", "st3"]:
             raise ValueError(f"Modelo no soportado: {model}")
+        self.n_jobs = n_jobs
         self.random_state = random_state
 
     def _calculate_dbcv(self, embeddings, labels):
@@ -132,8 +135,8 @@ class ClusteringManager:
             modelos_dir (str): Directorio donde guardar
         """
         try:
-            os.makedirs(modelos_dir, exist_ok=True)
-            
+            os.makedirs(f"{modelos_dir}/gridSearch/DBCV", exist_ok=True)
+
             dbcv_results = {
                 'method': method_name,
                 'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -242,7 +245,7 @@ class ClusteringManager:
                     n_neighbors=best_params['n_neighbors'],
                     n_components=best_params['n_components'],
                     metric='cosine',
-                    n_jobs=-1,
+                    n_jobs=self.n_jobs,
                     random_state=self.random_state
                 )
                 umap_embeddings = umap_model.fit_transform(embeddings)
@@ -327,7 +330,7 @@ class ClusteringManager:
             min_dist=min_dist,
             metric='cosine',
             random_state=self.random_state,
-            n_jobs=-1
+            n_jobs=self.n_jobs
         ).fit_transform(embeddings)
 
         clusters = hdbscan.HDBSCAN(
@@ -423,7 +426,7 @@ class ClusteringManager:
             min_dist=best_params['min_dist'],
             metric='cosine',
             random_state=self.random_state,
-            n_jobs=-1
+            n_jobs=self.n_jobs
         ).fit_transform(embeddings)
         
         dbcv_score = self._calculate_dbcv(temp_umap, best_clusters.labels_)
@@ -449,7 +452,7 @@ class ClusteringManager:
                 min_dist=best_params['min_dist'],
                 metric='cosine',
                 random_state=self.random_state,
-                n_jobs=-1
+                n_jobs=self.n_jobs
             ).fit(embeddings)
             umap_embeddings = umap_model.transform(embeddings)
             hdbscan_model = hdbscan.HDBSCAN(
@@ -601,7 +604,7 @@ class ClusteringManager:
             metric='cosine',
             min_dist=best_params.get('min_dist', 0.0),
             random_state=self.random_state, 
-            n_jobs=-1
+            n_jobs=self.n_jobs
         ).fit_transform(embeddings)
         
         dbcv_score = self._calculate_dbcv(temp_umap_bayes, best_clusters_for_dbcv.labels_)
@@ -634,7 +637,7 @@ class ClusteringManager:
                 metric='cosine',
                 min_dist=best_params.get('min_dist', 0.0),
                 random_state=self.random_state, 
-                n_jobs=-1
+                n_jobs=self.n_jobs
             ).fit(embeddings)
             umap_embeddings = umap_model.transform(embeddings)
             hdbscan_model = hdbscan.HDBSCAN(
@@ -735,7 +738,7 @@ class ClusteringManager:
             estimator=umap_estimator,
             param_grid=umap_space,
             cv=3,
-            n_jobs=-1,
+            n_jobs=self.n_jobs,
             verbose=3
         )
         
@@ -757,7 +760,7 @@ class ClusteringManager:
             estimator=hdbscan_estimator,
             param_grid=hdbscan_space,
             cv=3,
-            n_jobs=-1,
+            n_jobs=self.n_jobs,
             verbose=3
         )
         
@@ -788,27 +791,30 @@ class ClusteringManager:
         
         # Guardar modelos si se solicita
         if save_models:
-            os.makedirs(modelos_dir, exist_ok=True)
-            
+            model_dir_umap = f"{modelos_dir}/gridSearch/UMAP"
+            os.makedirs(model_dir_umap, exist_ok=True)
+            model_dir_hdbscan = f"{modelos_dir}/gridSearch/HDBSCAN"
+            os.makedirs(model_dir_hdbscan, exist_ok=True)
+
             # Guardar modelos individuales
-            with open(os.path.join(modelos_dir, "umap_separate_grid.pkl"), "wb") as f:
+            with open(os.path.join(model_dir_umap, "umap_separate_grid.pkl"), "wb") as f:
                 pickle.dump(best_umap_model, f)
-            with open(os.path.join(modelos_dir, "hdbscan_separate_grid.pkl"), "wb") as f:
+            with open(os.path.join(model_dir_hdbscan, "hdbscan_separate_grid.pkl"), "wb") as f:
                 pickle.dump(best_hdbscan_model, f)
             
             # Guardar embeddings y resultados
-            np.save(os.path.join(modelos_dir, "umap_embeddings_separate_grid.npy"), umap_embeddings)
-            
+            np.save(os.path.join(model_dir_umap, "umap_embeddings_separate_grid.npy"), umap_embeddings)
+
             # Guardar embeddings originales etiquetados
             embeddings_labeled = pd.DataFrame(embeddings)
             embeddings_labeled['label'] = final_labels
-            embeddings_labeled.to_csv(os.path.join(modelos_dir, "embeddings_originales_labeled_separate_grid.csv"), index=False)
-            
+            embeddings_labeled.to_csv(os.path.join(model_dir_hdbscan, "embeddings_labeled_separate_grid.csv"), index=False)
+
             # Guardar embeddings UMAP etiquetados
             umap_labeled = pd.DataFrame(umap_embeddings)
             umap_labeled['label'] = final_labels
-            umap_labeled.to_csv(os.path.join(modelos_dir, "embeddings_umap_labeled_separate_grid.csv"), index=False)
-            
+            umap_labeled.to_csv(os.path.join(model_dir_umap, "embeddings_umap_labeled_separate_grid.csv"), index=False)
+
             print(f"Modelos y resultados guardados en {modelos_dir}")
         
         tiempo_total = time.time() - start_time
@@ -818,9 +824,9 @@ class ClusteringManager:
         # Generar visualización
         self._generate_clustering_visualization(embeddings, combined_best_params, "separate_grid", modelos_dir, 
                                                best_umap_model.umap_model_, best_hdbscan_model.hdbscan_model_)
-        
+        model_dir_dbcv = f"{modelos_dir}/gridSearch/DBCV"
         # Crear archivo consolidado de resultados DBCV
-        self._save_consolidated_dbcv_results(modelos_dir)
+        self._save_consolidated_dbcv_results(model_dir_dbcv)
         
         # Crear DataFrame de resultados para compatibilidad
         result_df = pd.DataFrame([{
@@ -834,4 +840,4 @@ class ClusteringManager:
             'dbcv_score': dbcv_score
         }])
         
-        return result_df, combined_best_params, umap_grid.cv_results_, hdbscan_grid.cv_results_
+        return result_df, combined_best_params, pd.DataFrame(umap_grid.cv_results_), pd.DataFrame(hdbscan_grid.cv_results_)
