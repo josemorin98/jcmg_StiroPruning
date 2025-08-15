@@ -3,17 +3,13 @@ import numpy as np
 import pandas as pd
 from Modules.predict_vector import PredictVector
 from Modules.classification_manager import ClassificationManager
-import pickle
-from sklearn.metrics.pairwise import cosine_similarity
-from Modules.model_manager import EmbeddingModelManager
-import time 
 
 def main():
     parser = argparse.ArgumentParser(description="Predicción de grupo usando clasificación para un vector de entrada.")
     parser.add_argument("--modelo", type=str, choices=["use", "st1", "st2", "st3"], help="Modelo de embeddings a usar", default="st1")
-    parser.add_argument("--params", type=str, choices=["random", "bayesian", "spearate_grid"], help="Tipo de parámetros de clustering usados", default="bayesian")
-    parser.add_argument("--embeddings_path", type=str, default="../test/embeddings", help="Ruta al archivo .npy de embeddings")
-    parser.add_argument("--models_dir", type=str, default="../test/Modelos", help="Directorio donde están los modelos")
+    parser.add_argument("--params", type=str, choices=["random", "bayesian", "separate_grid"], help="Tipo de parámetros de clustering usados", default="bayesian")
+    parser.add_argument("--embeddings_path", type=str, default="test/Embeddings", help="Ruta al archivo .npy de embeddings")
+    parser.add_argument("--models_dir", type=str, default="test/Modelos", help="Directorio donde están los modelos")
     parser.add_argument("--use_adjusted", action="store_true", help="Usar embeddings ajustados con columnas spatial, temporal e interest")
     args = parser.parse_args()
     
@@ -27,12 +23,19 @@ def main():
     
     # 1. Vector de entrada (mismo formato que antes)
     print("\n=== VECTOR DE ENTRADA ===")
-    vector_input = ["Mexico.Total", "2012", "Mujeres.>65", "0.139", "0.139"]
+    # vector_input = ["Mexico.Total", "2012", "Mujeres.>65", "0.139", "0.139"]   # PRRUEBA 1
+    vector_input = ["zacatecas.benito juarez", "2017", "c80.mujeres.total",	"1k", "0.4739336492890995"]  # PRUEBA 2 Exacta
+    vector_input = ["tabasco.total", "20023", "c64.hombres.total", "100k", "3.594174562"]  # PRUEBA 2.1 No Exacta
+
     print("Vector entrada:", vector_input)
     if args.use_adjusted:
-        # Para embeddings ajustados, agregar las columnas spatial, temporal e interest
-        vector_input.extend(["spatial", "temporal", "interest"])
-        print("Vector entrada ajustado:", vector_input)
+        # Para embeddings ajustados, usar formato con spatial, temporal e interest
+        spatial      =  vector_input[0]  # Ejemplo de valor para spatial
+        temporal     =  vector_input[1]  # Ejemplo de valor para temporal
+        interest     =  vector_input[2]  # Ejemplo de valor para interest
+        reference      =  vector_input[3]  # Ejemplo de valor para referencia
+        observable   =  vector_input[4]  # Ejemplo de valor para observable
+        vector_input =  [spatial, temporal, interest] # Mantener los valores numéricos
     # vector_input = ["Mexico.Total", "2012", "Mujeres.>65", "0.2810551936189229", "0.2810551936189229"]
     query_string = ' '.join([str(x).replace(' ', '_') for x in vector_input])
     print("Vector en sentencia:", query_string)
@@ -64,32 +67,34 @@ def main():
     
     # Cargar embeddings etiquetados para búsqueda
     # embeddings_umap_labeled_path = f"{models_dir}/embeddings_umap_labeled_{args.params}.npy"
-    embeddings_originales_labeled_path = f"{models_dir}/embeddings_originales_labeled_{args.params}.npy"
+    embeddings_originales_labeled_path = f"{models_dir}/embeddings_originales_labeled_{args.params}.csv"
     print(f"Cargando datos desde: {models_dir}")
     print(f"Cargando embeddings origianles etiquetados desde: {embeddings_originales_labeled_path}")
     
-    embeddings_data, labels = classifier_manager.load_clustering_data(
-        embeddings_path=embeddings_originales_labeled_path,
-        clustering_manager_dir=models_dir,
-        method=args.params
+    embeddings_data, labels = classifier_manager.load_data(
+        embeddings_path=embeddings_originales_labeled_path
     )
     
     print(f"Datos cargados: {len(embeddings_data)} muestras, {len(np.unique(labels))} clases únicas")
     
+    
     # 6. Preparar datos para clasificación
-    X_train, X_test, y_train, y_test = classifier_manager.prepare_classification_data(
-        embeddings_data, labels, remove_noise=True
-    )
+    # X_train, X_test, y_train, y_test = classifier_manager.prepare_classification_data(
+    #     embeddings_data, labels, remove_noise=False
+    # )
+    
+    # print(f"Datos de entrenamiento: {X_train.shape}, Etiquetas: {y_train.shape}")
     
     # 7. Entrenar clasificadores
-    print("Entrenando clasificadores...")
-    results = classifier_manager.train_classifiers(X_train, y_train, cv_folds=3)
+    print("----- Entrenando clasificadores -----")
+    results = classifier_manager.train_classifiers(embeddings_data, labels, cv_folds=3)
     
     # 8. Predecir grupo para el nuevo vector
     best_model = classifier_manager.best_model
     predictions, probabilities = classifier_manager.predict_new_data(best_model, embedding.reshape(1, -1))
     predicted_label = predictions[0]
     
+    # exit()
     print(f"\n=== RESULTADO DE PREDICCIÓN ===")
     print(f"Mejor modelo: {best_model}")
     print(f"Grupo predicho: {predicted_label}")
@@ -99,16 +104,23 @@ def main():
         print(f"Probabilidad máxima: {max_prob:.4f}")
         
         # Mostrar probabilidades de todas las clases
-        unique_labels = np.unique(y_train)
         print("Probabilidades por clase:")
-        for i, label in enumerate(unique_labels):
-            print(f"  Clase {label}: {probabilities[0][i]:.4f}")
-
+        
+        unique_labels = np.unique(labels)
+        probabilities = probabilities[0].tolist()
+        
+        df_probabilities = pd.DataFrame({
+            'label': unique_labels,
+            'probability': probabilities
+        }).sort_values(by='probability', ascending=False)
+        
+        print(df_probabilities.to_string(index=False))
+        
     # 9. Reutilizar funciones de búsqueda exacta o top 10 más similar
     print(f"\n=== BÚSQUEDA EN GRUPO {predicted_label} ===")
     
     # Verificar si el embedding ya existe exactamente en el grupo
-    existe, idx_relativo, idx_global = predictor.existe_en_grupo_por_etiqueta(
+    existe, idx_relativo, idx_global, grupo_existente = predictor.existe_en_grupo_por_etiqueta(
         embedding, embeddings_originales_labeled_path, predicted_label
     )
     
@@ -116,34 +128,108 @@ def main():
         print(f"El embedding ya existe en el grupo {predicted_label}")
         print(f"Índice relativo en el grupo: {idx_relativo}")
         print(f"Índice global en el dataset: {idx_global}")
+        
+        # Cargar el CSV original para mostrar el vector correspondiente
+        try:
+            csv_original = pd.read_csv("../data/sample_v2.csv")
+            if idx_global < len(csv_original):
+                vector_original = csv_original.iloc[idx_global]
+                print(f"\nVector original encontrado:")
+                print(f"   Spatial: {vector_original['spatial']}")
+                print(f"   Temporal: {vector_original['temporal']}")
+                print(f"   Interest: {vector_original['interest']}")
+                print(f"   Reference: {vector_original['reference']}")
+                print(f"   Observation: {vector_original['observation']}")
+                
+                # Mostrar la sentencia como se procesaría
+                if args.use_adjusted:
+                    sentencia_procesada = f"{vector_original['Spatial']} {vector_original['Temporal']} {vector_original['Interest']}".replace(' ', '_')
+                else:
+                    sentencia_procesada = f"{vector_original['Spatial']} {vector_original['Temporal']} {vector_original['Interest']} {vector_original['Reference']} {vector_original['Observation']}".replace(' ', '_')
+                print(f"Sentencia procesada: {sentencia_procesada}")
+            else:
+                print(f"Índice global {idx_global} fuera del rango del CSV original")
+        except Exception as e:
+            print(f"Error al cargar CSV original: {str(e)}")
     else:
         print(f"El embedding NO existe en el grupo {predicted_label}")
         
         # Si es outlier/ruido, buscar los 10 más similares en todos los embeddings
-        if predicted_label == -1:
-            print("Grupo predicho es ruido (-1). Buscando los 10 más similares en todos los embeddings...")
+        if predicted_label == False:
+            print("Grupo predicho es ruido (False). Buscando los 10 más similares en todos los embeddings...")
             # Cargar embeddings originales etiquetados
-            embeddings_labeled = np.load(embeddings_originales_labeled_path)
-            embeddings_all = embeddings_labeled[:, :-1]  # Todas las columnas excepto la última (etiquetas)
-            similarities = cosine_similarity([embedding], embeddings_all)[0]
-            top10_idx = similarities.argsort()[-10:][::-1]
             
-            print("Top 10 más similares:")
-            for i, idx in enumerate(top10_idx):
-                # Obtener la etiqueta del embedding similar
-                label_similar = int(embeddings_labeled[idx, -1])
-                print(f"  {i+1}. Índice: {idx}, Similitud: {similarities[idx]:.4f}, Grupo: {label_similar}")
+            # Buscar los 10 más similares en todos los embeddings o buscar entre el rudio
+            
+            
+            # if embeddings_originales_labeled_path.endswith('.npy'):
+            #     embeddings_labeled = np.load(embeddings_originales_labeled_path)
+            #     # Convertir a DataFrame para manejar etiquetas
+            #     embeddings_labeled = pd.DataFrame(embeddings_labeled)  
+            #     # Asignar nombres de columnas
+            #     embeddings_labeled.columns = [f"{i}" for i in range(embeddings_labeled.shape[1])]
+            #     # Las etiquetas colocarlas con el nombre label
+            #     embeddings_labeled.columns[-1] = 'label'
+            # elif embeddings_originales_labeled_path.endswith('.csv'):
+            #     embeddings_labeled = pd.read_csv(embeddings_originales_labeled_path)  # Convertir a numpy array
+            # else:
+            #     raise ValueError("El archivo de embeddings debe ser .npy o .csv")
+        
+            # embeddings_all = embeddings_labeled[:, :-1]  # Todas las columnas excepto la última (etiquetas)
+            # similarities = cosine_similarity([embedding], embeddings_all)[0]
+            # top10_idx = similarities.argsort()[-10:][::-1]
+            
+            # print("Top 10 más similares:")
+            # for i, idx in enumerate(top10_idx):
+            #     # Obtener la etiqueta del embedding similar
+            #     label_similar = int(embeddings_labeled[idx, -1])
+            #     print(f"  {i+1}. Índice: {idx}, Similitud: {similarities[idx]:.4f}, Grupo: {label_similar}")
                 
         else:
             # Buscar similares dentro del grupo predicho
-            top_idx, similarities, idx_global = predictor.buscar_similares_en_grupo_por_etiqueta(
+            top_idx, similarities, idx_global, embeddings_group = predictor.buscar_similares_en_grupo_por_etiqueta(
                 embedding, embeddings_originales_labeled_path, predicted_label, top_n=10
             )
-            
+
+            embeddings_group.to_csv("../data/embeddings_group.csv", index=False)
+
             if len(top_idx) > 0:
                 print(f"Top {len(top_idx)} similares dentro del grupo {predicted_label}:")
-                for i, (rel_idx, glob_idx, sim) in enumerate(zip(top_idx, idx_global, similarities)):
-                    print(f"  {i+1}. Índice relativo: {rel_idx}, Índice global: {glob_idx}, Similitud: {sim:.4f}")
+                
+                # Cargar el CSV original para extraer los vectores originales
+                try:
+                    csv_original = pd.read_csv("../data/sample_v2.csv")
+                    print(f"\nVectores originales correspondientes:")
+                    print("="*80)
+                    
+                    for i, (rel_idx, glob_idx, sim) in enumerate(zip(top_idx, idx_global, similarities)):
+                        print(f"\n{i+1}. Similitud: {sim:.4f}")
+                        print(f"   Índice relativo: {rel_idx}, Índice global: {glob_idx}")
+                        
+                        # Verificar que el índice global esté dentro del rango del CSV
+                        if glob_idx < len(csv_original):
+                            vector_original = csv_original.iloc[glob_idx]
+                            print(f"   Vector original:")
+                            print(f"     Spatial: {vector_original['spatial']}")
+                            print(f"     Temporal: {vector_original['temporal']}")
+                            print(f"     Interest: {vector_original['interest']}")
+                            print(f"     Reference: {vector_original['reference']}")
+                            print(f"     Observation: {vector_original['observation']}")
+                            
+                            # Mostrar la sentencia como se procesaría
+                            if args.use_adjusted:
+                                sentencia_procesada = f"{vector_original['spatial']} {vector_original['temporal']} {vector_original['interest']}"
+                            else:
+                                sentencia_procesada = f"{vector_original['spatial']} {vector_original['temporal']} {vector_original['interest']} {vector_original['reference']} {vector_original['observation']}"
+                            print(f"Sentencia procesada: {sentencia_procesada}")
+                        else:
+                            print(f"Índice global {glob_idx} fuera del rango del CSV original")
+                        print("-" * 60)
+                        
+                except FileNotFoundError:
+                    print("No se pudo cargar el CSV original '../data/sample.csv'")
+                except Exception as e:
+                    print(f"Error al cargar CSV original: {str(e)}")
             else:
                 print(f"No se encontraron embeddings en el grupo {predicted_label}")
     

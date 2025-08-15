@@ -13,3 +13,7 @@ seaborn==0.13.2
 plotly==5.24.1
 joblib==1.4.2
 scipy==1.13.1
+xgboost-cpu==3.0.3
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6

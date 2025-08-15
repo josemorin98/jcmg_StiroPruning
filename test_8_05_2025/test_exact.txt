@@ -1,0 +1,140 @@
+Usando modelo: st2
+Tipo de parámetros: separate_grid
+Embeddings ajustados: True
+
+=== VECTOR DE ENTRADA ===
+Vector entrada: ['Mexico.Total', '2012', 'Mujeres.>65', '0.139', '0.139']
+Vector en sentencia: Mexico.Total 2012 Mujeres.>65
+
+=== GENERACIÓN DE EMBEDDING ===
+Cargando modelo de embeddings: st2
+Creando carpeta de st2
+Embedding generado con dimensiones: (384,)
+
+=== CLASIFICACIÓN ===
+Cargando datos desde: ../test/Modelos_st2_adjusted
+Cargando embeddings origianles etiquetados desde: ../test/Modelos_st2_adjusted/embeddings_originales_labeled_separate_grid.csv
+Embeddings cargados desde con forma (41910, 385)
+Columna etiqueta al final label
+Datos cargados: 41910 muestras, 87 clases únicas
+Entrenando clasificadores...
+Entrenando random_forest...
+random_forest - CV Score: 0.9803 (+/- 0.0033)
+Entrenando mlp...
+mlp - CV Score: 0.9830 (+/- 0.0026)
+
+Mejor modelo: mlp (Score: 0.9830)
+Tiempo de entrenamiento: 436.73 segundos
+
+=== RESULTADO DE PREDICCIÓN ===
+Mejor modelo: mlp
+Grupo predicho: 24
+Probabilidad máxima: 1.0000
+Probabilidades por clase:
+  Clase -1: 0.0000
+  Clase 0: 0.0000
+  Clase 1: 0.0000
+  Clase 2: 0.0000
+  Clase 3: 0.0000
+  Clase 4: 0.0000
+  Clase 5: 0.0000
+  Clase 6: 0.0000
+  Clase 7: 0.0000
+  Clase 8: 0.0000
+  Clase 9: 0.0000
+  Clase 10: 0.0000
+  Clase 11: 0.0000
+  Clase 12: 0.0000
+  Clase 13: 0.0000
+  Clase 14: 0.0000
+  Clase 15: 0.0000
+  Clase 16: 0.0000
+  Clase 17: 0.0000
+  Clase 18: 0.0000
+  Clase 19: 0.0000
+  Clase 20: 0.0000
+  Clase 21: 0.0000
+  Clase 22: 0.0000
+  Clase 23: 0.0000
+  Clase 24: 1.0000
+  Clase 25: 0.0000
+  Clase 26: 0.0000
+  Clase 27: 0.0000
+  Clase 28: 0.0000
+  Clase 29: 0.0000
+  Clase 30: 0.0000
+  Clase 31: 0.0000
+  Clase 32: 0.0000
+  Clase 33: 0.0000
+  Clase 34: 0.0000
+  Clase 35: 0.0000
+  Clase 36: 0.0000
+  Clase 37: 0.0000
+  Clase 38: 0.0000
+  Clase 39: 0.0000
+  Clase 40: 0.0000
+  Clase 41: 0.0000
+  Clase 42: 0.0000
+  Clase 43: 0.0000
+  Clase 44: 0.0000
+  Clase 45: 0.0000
+  Clase 46: 0.0000
+  Clase 47: 0.0000
+  Clase 48: 0.0000
+  Clase 49: 0.0000
+  Clase 50: 0.0000
+  Clase 51: 0.0000
+  Clase 52: 0.0000
+  Clase 53: 0.0000
+  Clase 54: 0.0000
+  Clase 55: 0.0000
+  Clase 56: 0.0000
+  Clase 57: 0.0000
+  Clase 58: 0.0000
+  Clase 59: 0.0000
+  Clase 60: 0.0000
+  Clase 61: 0.0000
+  Clase 62: 0.0000
+  Clase 63: 0.0000
+  Clase 64: 0.0000
+  Clase 65: 0.0000
+  Clase 66: 0.0000
+  Clase 67: 0.0000
+  Clase 68: 0.0000
+  Clase 69: 0.0000
+  Clase 70: 0.0000
+  Clase 71: 0.0000
+  Clase 72: 0.0000
+  Clase 73: 0.0000
+  Clase 74: 0.0000
+  Clase 75: 0.0000
+  Clase 76: 0.0000
+  Clase 77: 0.0000
+  Clase 78: 0.0000
+  Clase 79: 0.0000
+  Clase 80: 0.0000
+  Clase 81: 0.0000
+  Clase 82: 0.0000
+  Clase 83: 0.0000
+  Clase 84: 0.0000
+  Clase 85: 0.0000
+
+=== BÚSQUEDA EN GRUPO 24 ===
+El embedding ya existe en el grupo 24
+Índice relativo en el grupo: 0
+Índice global en el dataset: 6
+
+Vector original encontrado:
+   Spatial: Mexico.Total
+   Temporal: 2012
+   Interest: Mujeres.>65
+   Reference: 0.139
+   Observation: 0.139
+Sentencia procesada: Mexico.Total_2012_Mujeres.>65
+
+=== RESUMEN ===
+Vector de entrada procesado exitosamente
+Modelo de embeddings: st2
+Modelo de clasificación: mlp
+Grupo predicho: 24
+Confianza: 1.0000

@@ -17,11 +17,12 @@ def main():
     parser.add_argument("--label_lower", type=int, default=100, help="Límite inferior para las etiquetas")
     parser.add_argument("--label_upper", type=int, default=1000, help="Límite superior para las etiquetas")
     parser.add_argument("--use_adjusted", action="store_true", help="Usar embeddings ajustados con columnas spatial, temporal e interest")
-
+    parser.add_argument("--output_dir", type=str, default="test", help="Directorio de salida para los resultados")
     # Parse los argumentos
     args = parser.parse_args()
-    path_test = "../test"
-
+    
+    path_test  = f"../../{args.output_dir}"
+    start_time = time.time()
     # Verificar si el modelo es válido
     if args.modelo not in ["use", "st1", "st2", "st3"]:
         raise ValueError("Modelo no válido. Debe ser 'use', 'st1', 'st2' o 'st3'.")
@@ -46,118 +47,127 @@ def main():
     print(f"Cargando embeddings desde {path_embeddings} ...")
     embeddings = np.load(path_embeddings)
     print(f"Dimensiones de embeddings: {embeddings.shape}")
-
+    tiempo_carga = time.time() - start_time
+    print(f"Tiempo de carga del archivo de embeddings: {tiempo_carga:.2f} segundos")
+    
+    start_time = time.time()
     clustering = ClusteringManager(random_state=42, model=args.modelo)
 
-    # Ajustar rangos de hiperparámetros para embeddings con información adicional
-    if args.use_adjusted:
-        # Parámetros optimizados para embeddings con información espacial/temporal/interés
-        configSpace_random = {
-            "n_neighbors": np.arange(30, 50, 2),
-            "n_components": np.arange(3, 4),
-            "min_cluster_size": np.arange(120, 200),
-            "min_samples": np.arange(50, 150),
-            "min_dist": [0.0, 0.1, 0.25]
-        }
-        configSpace_bayes = {
-            "n_neighbors": hp.choice("n_neighbors", list(range(30, 50, 2))),
-            "n_components": hp.choice("n_components", list(range(3, 4))),
-            "min_samples": hp.choice("min_samples", list(range(120, 200))),
-            "min_cluster_size": hp.choice("min_cluster_size", list(range(50, 150))),
-            "min_dist": hp.choice("min_dist", [0.0, 0.1, 0.25]),
-            "random_state": 42
-        }
+    # # Ajustar rangos de hiperparámetros para embeddings con información adicional
+    # if args.use_adjusted:
+    #     # Parámetros optimizados para embeddings con información espacial/temporal/interés
+    #     configSpace_random = {
+    #         "n_neighbors": np.arange(30, 50, 2),
+    #         "n_components": np.arange(3, 4),
+    #         "min_cluster_size": np.arange(120, 200),
+    #         "min_samples": np.arange(50, 150),
+    #         "min_dist": [0.0, 0.1, 0.25]
+    #     }
+    #     configSpace_bayes = {
+    #         "n_neighbors": hp.choice("n_neighbors", list(range(30, 50, 2))),
+    #         "n_components": hp.choice("n_components", list(range(3, 4))),
+    #         "min_samples": hp.choice("min_samples", list(range(120, 200))),
+    #         "min_cluster_size": hp.choice("min_cluster_size", list(range(50, 150))),
+    #         "min_dist": hp.choice("min_dist", [0.0, 0.1, 0.25]),
+    #         "random_state": 42
+    #     }
 
-    else:
-        # Parámetros originales para embeddings estándar
-        configSpace_random = {
-            "n_neighbors": np.arange(30, 100),
-            "n_components": np.arange(2, 4),
-            "min_cluster_size": np.arange(100, 200, 20),
-            "min_samples": np.arange(50, 150, 5),
-            "min_dist": [0.0, 0.1, 0.25]
-        }
-        configSpace_bayes = {
-            "n_neighbors": hp.choice("n_neighbors", list(range(30, 100))),
-            "n_components": hp.choice("n_components", list(range(2, 4))),
-            "min_cluster_size": hp.choice("min_cluster_size", list(range(100, 200, 20))),
-            "min_samples": hp.choice("min_samples", list(range(50, 150, 5))),
-            "min_dist": hp.choice("min_dist", [0.0, 0.1, 0.25]),
-            "random_state": 42
-        }
+    # else:
+    #     # Parámetros originales para embeddings estándar
+    #     configSpace_random = {
+    #         "n_neighbors": np.arange(30, 100),
+    #         "n_components": np.arange(2, 4),
+    #         "min_cluster_size": np.arange(100, 200, 20),
+    #         "min_samples": np.arange(50, 150, 5),
+    #         "min_dist": [0.0, 0.1, 0.25]
+    #     }
+    #     configSpace_bayes = {
+    #         "n_neighbors": hp.choice("n_neighbors", list(range(30, 100))),
+    #         "n_components": hp.choice("n_components", list(range(2, 4))),
+    #         "min_cluster_size": hp.choice("min_cluster_size", list(range(100, 200, 20))),
+    #         "min_samples": hp.choice("min_samples", list(range(50, 150, 5))),
+    #         "min_dist": hp.choice("min_dist", [0.0, 0.1, 0.25]),
+    #         "random_state": 42
+    #     }
 
 
-    # Variables para almacenar resultados
-    random_results, best_random_params = None, None
-    bayes_params, bayes_clusters, trials = None, None, None
-    grid_results, best_grid_params = None, None
+    # # Variables para almacenar resultados
+    # random_results, best_random_params = None, None
+    # bayes_params, bayes_clusters, trials = None, None, None
+    # grid_results, best_grid_params = None, None
     
     # ===============================================================================
     # EJECUTAR TODAS LAS BÚSQUEDAS
     # ===============================================================================
     
+    
     print(f"\nEjecutando todas las búsquedas de hiperparámetros")
     print(f"Directorio de modelos: {path_test}/Modelos_{args.modelo}{output_suffix}")
     
     # # ------------------- Random Search -------------------
-    print("\n" + "="*50)
-    print("RANDOM SEARCH")
-    print("="*50)
-    start_time = time.time()
+    # print("\n" + "="*50)
+    # print("RANDOM SEARCH")
+    # print("="*50)
+    # start_time = time.time()
 
-    random_results, best_random_params = clustering.random_search(
-        embeddings=embeddings,
-        space=configSpace_random,
-        num_evals=args.max_evals,
-        save_models=True,
-        modelos_dir=f"{path_test}/Modelos_{args.modelo}{output_suffix}",
-    )
-    random_results.to_csv(f"{path_test}/random_{args.modelo}{output_suffix}.csv", index=False)
-    print(f"Random Search completado en {time.time() - start_time:.2f} segundos.")
-    print(f"Mejores parámetros (random): {best_random_params}")
+    # random_results, best_random_params = clustering.random_search(
+    #     embeddings=embeddings,
+    #     space=configSpace_random,
+    #     num_evals=args.max_evals,
+    #     save_models=True,
+    #     modelos_dir=f"{path_test}/Modelos_{args.modelo}{output_suffix}",
+    # )
+    # random_results.to_csv(f"{path_test}/random_{args.modelo}{output_suffix}.csv", index=False)
+    # print(f"Random Search completado en {time.time() - start_time:.2f} segundos.")
+    # print(f"Mejores parámetros (random): {best_random_params}")
 
     # # ------------------- Bayesian Search -------------------
-    print("\n" + "="*50)
-    print("BAYESIAN SEARCH")
-    print("="*50)
-    start_time = time.time()
+    # print("\n" + "="*50)
+    # print("BAYESIAN SEARCH")
+    # print("="*50)
+    # start_time = time.time()
   
-    label_lower = args.label_lower
-    label_upper = args.label_upper
-    bayes_params, bayes_clusters, trials = clustering.bayesian_search(
-        embeddings=embeddings,
-        space=configSpace_bayes,
-        label_lower=label_lower,
-        label_upper=label_upper,
-        max_evals=args.max_evals,
-        csv_path=f"{path_test}/bayesian_{args.modelo}{output_suffix}.csv",
-        save_models=True,
-        modelos_dir=f"{path_test}/Modelos_{args.modelo}{output_suffix}",
-    )
-    print(f"Bayesian Search completado en {time.time() - start_time:.2f} segundos.")
-    print(f"Mejores parámetros (bayesian): {bayes_params}")
+    # label_lower = args.label_lower
+    # label_upper = args.label_upper
+    # bayes_params, bayes_clusters, trials = clustering.bayesian_search(
+    #     embeddings=embeddings,
+    #     space=configSpace_bayes,
+    #     label_lower=label_lower,
+    #     label_upper=label_upper,
+    #     max_evals=args.max_evals,
+    #     csv_path=f"{path_test}/bayesian_{args.modelo}{output_suffix}.csv",
+    #     save_models=True,
+    #     modelos_dir=f"{path_test}/Modelos_{args.modelo}{output_suffix}",
+    # )
+    # print(f"Bayesian Search completado en {time.time() - start_time:.2f} segundos.")
+    # print(f"Mejores parámetros (bayesian): {bayes_params}")
 
     # ------------------- Grid Search -------------------
     print("\n" + "="*50)
-    print("GRID SEARCH SEPARADO (UMAP + HDBSCAN)")
+    print("GRID SEARCH (UMAP + HDBSCAN)")
     print("="*50)
-    start_time = time.time()
     
     # Configurar parámetros separados para UMAP y HDBSCAN
     if args.use_adjusted:
         # Parámetros para embeddings ajustados
+        # umap_param_grid = {
+        #     "n_neighbors": np.arange(30, 50, 2),
+        #     "n_components": np.arange(2, 11),
+        #     'min_dist': [0.0, 0.1, 0.25]
+        # }
+        # hdbscan_param_grid = {
+        #     'min_cluster_size': np.arange(100,200,20),
+        #     'min_samples': np.arange(50, 150, 5),
+        # }
+
         umap_param_grid = {
-            # 'n_neighbors': [15, 20, 25, 30, 35, 40, 45],
-            # 'n_components': [2, 3],
-            "n_neighbors": np.arange(30, 50, 2),
-            "n_components": np.arange(3, 4),
+            "n_neighbors": [30],
+            "n_components": [2],
             'min_dist': [0.0, 0.1, 0.25]
-            # "min_samples": np.arange(50, 150)
         }
         hdbscan_param_grid = {
-            'min_cluster_size': np.arange(100,200,20),# [120, 140, 160, 180],
-            'min_samples': np.arange(50, 150, 5),
-            # 'cluster_selection_epsilon': [0.0, 0.1, 0.2]
+            'min_cluster_size': [100],
+            'min_samples': [50,100],
         }
     else:
         # Parámetros para embeddings originales
@@ -168,8 +178,7 @@ def main():
         }
         hdbscan_param_grid = {
             'min_cluster_size': [10, 20, 30, 40],
-            'min_samples': [10, 20, 30, 40],
-            # 'cluster_selection_epsilon': [0.0, 0.1, 0.2]
+            'min_samples': [10, 20, 30, 40]
         }
     
     # Calcular número total de combinaciones
@@ -186,7 +195,7 @@ def main():
     print(f"Total de evaluaciones: {umap_combinations + hdbscan_combinations}")
     
     # Ejecutar Grid Search separado
-    grid_results, combined_best_params = clustering.separate_grid_search(
+    grid_results, combined_best_params, umap_results, hdbscan_results = clustering.separate_grid_search(
         embeddings=embeddings,
         umap_space=umap_param_grid,
         hdbscan_space=hdbscan_param_grid,
@@ -226,6 +235,8 @@ def main():
         'dbcv_score': dbcv_score,
         'total_time_seconds': time.time() - start_time
     }
+    tiempo_grid = time.time() - start_time
+    print(f"Tiempo de Grid Search: {tiempo_grid:.2f} segundos")
     
     pd.DataFrame([grid_summary]).to_csv(f"{path_test}/grid_{args.modelo}{output_suffix}.csv", index=False)
     print(f"Grid Search completado en {time.time() - start_time:.2f} segundos.")
@@ -247,15 +258,6 @@ def main():
     print(f"Dimensiones embeddings: {embeddings.shape}")
     print(f"Evaluaciones por búsqueda: {args.max_evals}")
     
-    print(f"\nRandom Search - Mejores parámetros:")
-    for key, value in best_random_params.items():
-        print(f"   {key}: {value}")
-    
-    print(f"\nBayesian Search - Mejores parámetros:")
-    for key, value in bayes_params.items():
-        if key != 'random_state':
-            print(f"   {key}: {value}")
-    
     print(f"\nGrid Search Separado - Mejores parámetros:")
     print(f"   UMAP:")
     for key, value in best_grid_params['umap_params'].items():
@@ -271,6 +273,9 @@ def main():
         print(f"   DBCV Score: No disponible")
     
     print(f"\nArchivos guardados en: {path_test}")
+    umap_results.to_csv(f"{path_test}/Modelos_{args.modelo}{output_suffix}/umap_results.csv", index=False)
+    hdbscan_results.to_csv(f"{path_test}/Modelos_{args.modelo}{output_suffix}/hdbscan_results.csv", index=False)
+    print(f"Resultados CSV: {path_test}/Modelos_{args.modelo}{output_suffix}")
     print(f"Modelos guardados en: {path_test}/Modelos_{args.modelo}{output_suffix}/")
     
     # Mostrar archivos generados

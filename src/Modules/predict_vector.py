@@ -2,6 +2,7 @@ import numpy as np
 import pickle
 from sklearn.metrics.pairwise import cosine_similarity
 from Modules.model_manager import EmbeddingModelManager
+import pandas as pd
 
 class PredictVector:
     def __init__(self, embedding_model_name, embedding_model_type, embedding_model_path):
@@ -123,43 +124,59 @@ class PredictVector:
                 return True, idx
         return False, None
     
-    def existe_en_grupo_por_etiqueta(self, embedding, embeddings_labeled_path, grupo_id, atol=1e-6):
+    def existe_en_grupo_por_etiqueta(self, embedding_query, embeddings_path, grupo_id, atol=1e-6):
         """
         Verifica si el embedding de entrada existe exactamente (o casi exactamente) en el grupo especificado
         dentro del conjunto completo de embeddings etiquetados.
 
         Parámetros:
-            embedding (np.ndarray): Vector embedding de entrada.
-            embeddings_labeled_path (str): Ruta al archivo .npy con todos los embeddings etiquetados.
+            embedding_query (np.ndarray): Vector embedding de entrada.
+            embeddings_path (str): Ruta al archivo .npy con todos los embeddings etiquetados.
             grupo_id (int): Etiqueta del grupo donde buscar.
             atol (float): Tolerancia para igualdad numérica (por defecto 1e-6).
 
         Retorna:
             existe (bool): True si el embedding está en el grupo, False si no.
-            idx (int o None): Índice relativo dentro del grupo donde se encontró, o None si no está.
+            idx_relativo (int o None): Índice relativo dentro del grupo donde se encontró, o None si no está.
             idx_global (int o None): Índice global en el archivo original, o None si no está.
         """
-        # Cargar embeddings etiquetados (.npy que incluye la columna 'label')
-        embeddings_labeled = np.load(embeddings_labeled_path)
+        # Cargar embeddings etiquetados
+        if embeddings_path.endswith('.npy'):
+            embeddings_data = np.load(embeddings_path)
+            # Convertir a DataFrame para manejar etiquetas
+            embeddings_df = pd.DataFrame(embeddings_data)  
+            # Asignar nombres de columnas
+            embeddings_df.columns = [f"{i}" for i in range(embeddings_df.shape[1])]
+            # Las etiquetas colocarlas con el nombre label
+            embeddings_df.columns[-1] = 'label'
+            
+        elif embeddings_path.endswith('.csv'):
+            embeddings_df = pd.read_csv(embeddings_path)
+        else:
+            raise ValueError("El archivo de embeddings debe ser .npy o .csv")
         
-        # Separar los embeddings de las etiquetas (asumiendo que la última columna es 'label')
-        embeddings = embeddings_labeled[:, :-1]  # Todas las columnas excepto la última
-        labels = embeddings_labeled[:, -1]       # Última columna (etiquetas)
+        # Verificar si la columna 'label' existe
+        if 'label' not in embeddings_df.columns:
+            raise FileNotFoundError(f"No se encontraron etiquetas en {embeddings_path}")
         
-        # Filtrar solo los embeddings del grupo especificado
-        indices_grupo = np.where(labels == grupo_id)[0]
-        if len(indices_grupo) == 0:
+        # Filtrar embeddings por grupo y obtener índices globales
+        mask_grupo = embeddings_df['label'] == grupo_id
+        embeddings_group = embeddings_df[mask_grupo]
+        indices_globales = embeddings_df.index[mask_grupo].tolist()
+        
+        if len(embeddings_group) == 0:
             return False, None, None
         
-        grupo_embeddings = embeddings[indices_grupo]
+        # Extraer solo las columnas de embeddings (sin la columna 'label')
+        embeddings_group_valores = embeddings_group.drop(columns=['label']).values
         
         # Buscar si el embedding existe en el grupo
-        for idx_relativo, emb in enumerate(grupo_embeddings):
-            if np.allclose(embedding, emb, atol=atol):
-                idx_global = indices_grupo[idx_relativo]
-                return True, idx_relativo, idx_global
+        for idx_relativo, emb_row in enumerate(embeddings_group_valores):
+            if np.allclose(embedding_query, emb_row, atol=atol):
+                idx_global = indices_globales[idx_relativo]
+                return True, idx_relativo, idx_global, embeddings_group
         
-        return False, None, None
+        return False, None, None, None
 
     def buscar_similares_en_grupo_por_etiqueta(self, embedding, embeddings_labeled_path, grupo_id, top_n=10):
         """
@@ -178,23 +195,42 @@ class PredictVector:
             idx_global (np.ndarray): Índices globales en el archivo de embeddings etiquetados.
         """
         # Cargar embeddings etiquetados (.npy que incluye la columna 'label')
-        embeddings_labeled = np.load(embeddings_labeled_path)
+        if embeddings_labeled_path.endswith('.npy'):
+            embeddings_data = np.load(embeddings_labeled_path)
+            # Convertir a DataFrame para manejar etiquetas
+            embeddings_df = pd.DataFrame(embeddings_data)  
+            # Asignar nombres de columnas
+            embeddings_df.columns = [f"{i}" for i in range(embeddings_df.shape[1])]
+            # Las etiquetas colocarlas con el nombre label
+            embeddings_df.columns[-1] = 'label'
+            
+        elif embeddings_labeled_path.endswith('.csv'):
+            embeddings_df = pd.read_csv(embeddings_labeled_path)
+        else:
+            raise ValueError("El archivo de embeddings debe ser .npy o .csv")
         
-        # Separar los embeddings de las etiquetas (asumiendo que la última columna es 'label')
-        embeddings = embeddings_labeled[:, :-1]  # Todas las columnas excepto la última
-        labels = embeddings_labeled[:, -1]       # Última columna (etiquetas)
+        # Verificar si la columna 'label' existe
+        if 'label' not in embeddings_df.columns:
+            raise FileNotFoundError(f"No se encontraron etiquetas en {embeddings_labeled_path}")
         
-        # Filtrar embeddings y obtener índices globales del grupo
-        idx_global = np.where(labels == grupo_id)[0]
-        if len(idx_global) == 0:
+        # Filtrar embeddings por grupo y obtener índices globales
+        mask_grupo = embeddings_df['label'] == grupo_id
+        embeddings_group = embeddings_df[mask_grupo]
+        indices_globales = embeddings_df.index[mask_grupo].tolist()
+        
+        if len(embeddings_group) == 0:
             return np.array([]), np.array([]), np.array([])
         
-        grupo_embeddings = embeddings[idx_global]
+        # Extraer solo las columnas de embeddings (sin la columna 'label')
+        embeddings_group_valores = embeddings_group.drop(columns=['label']).values
         
         # Calcular similitudes coseno
-        similarities = cosine_similarity([embedding], grupo_embeddings)[0]
+        similarities = cosine_similarity([embedding], embeddings_group_valores)[0]
         
         # Obtener los top_n más similares
         top_idx = similarities.argsort()[-top_n:][::-1]
         
-        return top_idx, similarities[top_idx], idx_global[top_idx]
+        # Convertir indices_globales a numpy array para poder indexar con top_idx
+        indices_globales_array = np.array(indices_globales)
+        
+        return top_idx, similarities[top_idx], indices_globales_array[top_idx], embeddings_group

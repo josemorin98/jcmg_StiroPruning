@@ -3,15 +3,11 @@ import pickle
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
-import matplotlib.pyplot as plt
-import seaborn as sns
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import classification_report, accuracy_score
 import time
 from sklearn.neural_network import MLPClassifier
+from xgboost import XGBClassifier
 
 class ClassificationManager:
     """
@@ -52,48 +48,60 @@ class ClassificationManager:
             df = pd.concat([df_ant, df], ignore_index=True)
         df.to_csv(csv_path, index=False)
     
-    def load_clustering_data(self, embeddings_path, labels_path=None, clustering_manager_dir=None, method="bayesian"):
+    def load_data(self, embeddings_path):
         """
         Carga los embeddings y las etiquetas de clustering.
         
+        NOTA: Este método asume que las etiquetas están en un archivo de embeddings
+        por lo tanto la clase etiqueta se debe colocar hasta el final con el nombre de "label".
+        
         Parámetros:
             embeddings_path (str): Ruta al archivo de embeddings (.npy).
-            labels_path (str): Ruta al archivo de etiquetas (.npy o .csv) (opcional).
-            clustering_manager_dir (str): Directorio con modelos de clustering (opcional).
-            method (str): Método de clustering usado ('bayesian', 'random', 'grid').
-            
+    
         Retorna:
             embeddings (np.ndarray): Embeddings cargados.
             labels (np.ndarray): Etiquetas de clustering.
         """
         # Cargar embeddings
+        # print(f"Cargando.... {embeddings_path}")
         if embeddings_path.endswith('.npy'):
             embeddings = np.load(embeddings_path)
-        else:
-            raise ValueError("El archivo de embeddings debe ser .npy")
+            # Convertir a DataFrame para manejar etiquetas
+            embeddings = pd.DataFrame(embeddings)  
+            # Asignar nombres de columnas
+            embeddings.columns = [f"{i}" for i in range(embeddings.shape[1])]
+            # Las etiquetas colocarlas con el nombre label
+            embeddings.columns[-1] = 'label'
             
-        # Cargar etiquetas
+        elif embeddings_path.endswith('.csv'):
+            embeddings = pd.read_csv(embeddings_path)  # Convertir a numpy array
+        else:
+            raise ValueError("El archivo de embeddings debe ser .npy o .csv")
+        
+        print(f"Embeddings cargados desde con forma {embeddings.shape}")
+        print(f"Columna etiqueta al final {embeddings.columns[-1]}")
+        
+        
         labels = None
-        if labels_path:
-            if labels_path.endswith('.npy'):
-                labels = np.load(labels_path)
-                if labels.ndim > 1:  # Si incluye embeddings + labels
-                    labels = labels[:, -1]  # Última columna son las etiquetas
-            elif labels_path.endswith('.csv'):
-                df = pd.read_csv(labels_path)
-                labels = df['label'].values
-        elif clustering_manager_dir:
-            # Intentar cargar desde el directorio de clustering
-            label_file = os.path.join(clustering_manager_dir, f"embeddings_originales_labeled_{method}.csv")
-            if os.path.exists(label_file):
-                df = pd.read_csv(label_file)
-                labels = df['label'].values
-            else:
-                raise FileNotFoundError(f"No se encontraron etiquetas en {label_file}")
+        NAME_COLUMN_LABEL = "label"
+        if NAME_COLUMN_LABEL in embeddings.columns:
+            labels = embeddings[NAME_COLUMN_LABEL].values
+            # Separar embeddings de etiquetas
+            embeddings = embeddings.drop(columns=[NAME_COLUMN_LABEL]).values
         else:
-            raise ValueError("Debe proporcionar labels_path o clustering_manager_dir")
+            raise FileNotFoundError(f"No se encontraron etiquetas en {embeddings_path}")
+        
+        # SIGUIENTE ACTUALIZACIÓN:
+        # Si embeddings incluye las etiquetas, separarlas
+        
+               
+        # # Si embeddings incluye las etiquetas, separarlas
+        # if embeddings.ndim > 1 and embeddings_path.endswith('.npy'):
+        #     if labels is None:  # Solo separar si no hemos cargado las etiquetas por separado
+        #         labels = embeddings[:, -1]  # Última columna son las etiquetas
+        #         embeddings = embeddings[:, :-1]  # Todas las columnas excepto la última
             
-        return embeddings[:, :-1], labels
+        return embeddings, labels
     
     def prepare_classification_data(self, embeddings, labels, remove_noise=True, test_size=0.2):
         """
@@ -122,7 +130,7 @@ class ClassificationManager:
         print(f"Datos preparados: {len(embeddings)} muestras, {len(unique_labels)} clases")
         print(f"Distribución de clases: {dict(zip(*np.unique(labels, return_counts=True)))}")
         
-        # Dividir datos
+
         X_train, X_test, y_train, y_test = train_test_split(
             embeddings, labels, test_size=test_size, 
             random_state=self.random_state, stratify=labels

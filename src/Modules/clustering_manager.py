@@ -834,4 +834,4 @@ class ClusteringManager:
             'dbcv_score': dbcv_score
         }])
         
-        return result_df, combined_best_params
+        return result_df, combined_best_params, umap_grid.cv_results_, hdbscan_grid.cv_results_
