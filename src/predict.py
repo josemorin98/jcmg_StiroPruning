@@ -16,6 +16,8 @@ def main():
     # Determinar sufijo según si se usan embeddings ajustados
     model_suffix = "_adjusted" if args.use_adjusted else ""
     params_suffix = f"_{args.params}"
+    if args.params == "separate_grid":
+        model_params = "gridSearch"
     
     print(f"Usando modelo: {args.modelo}")
     print(f"Tipo de parámetros: {args.params}")
@@ -25,7 +27,10 @@ def main():
     print("\n=== VECTOR DE ENTRADA ===")
     # vector_input = ["Mexico.Total", "2012", "Mujeres.>65", "0.139", "0.139"]   # PRRUEBA 1
     vector_input = ["zacatecas.benito juarez", "2017", "c80.mujeres.total",	"1k", "0.4739336492890995"]  # PRUEBA 2 Exacta
-    vector_input = ["tabasco.total", "20023", "c64.hombres.total", "100k", "3.594174562"]  # PRUEBA 2.1 No Exacta
+    vector_input = ["tabasco.total", "2023", "c64.hombres.total", "100k", "3.594174562"]  # PRUEBA 2.1 No Exacta
+
+    vector_input = ["aguascalientes", "2004", "arsenico_(polvos_respirables_vapores_o_humos)_aire",	989.0, 1]  # PRUEBA 3 Exacta
+    vector_input = ["aguascalientes", "2004", "arsenico_(polvos_respirables_vapores_o_humos)_agua",	989.0, 1]  # PRUEBA 3.1 No Exacta
 
     print("Vector entrada:", vector_input)
     if args.use_adjusted:
@@ -67,7 +72,7 @@ def main():
     
     # Cargar embeddings etiquetados para búsqueda
     # embeddings_umap_labeled_path = f"{models_dir}/embeddings_umap_labeled_{args.params}.npy"
-    embeddings_originales_labeled_path = f"{models_dir}/embeddings_originales_labeled_{args.params}.csv"
+    embeddings_originales_labeled_path = f"{models_dir}/{model_params}/HDBSCAN/embeddings_labeled_{args.params}.csv"
     print(f"Cargando datos desde: {models_dir}")
     print(f"Cargando embeddings origianles etiquetados desde: {embeddings_originales_labeled_path}")
     
@@ -131,7 +136,7 @@ def main():
         
         # Cargar el CSV original para mostrar el vector correspondiente
         try:
-            csv_original = pd.read_csv("../data/sample_v2.csv")
+            csv_original = pd.read_csv("../data/sample.csv")
             if idx_global < len(csv_original):
                 vector_original = csv_original.iloc[idx_global]
                 print(f"\nVector original encontrado:")
@@ -143,9 +148,9 @@ def main():
                 
                 # Mostrar la sentencia como se procesaría
                 if args.use_adjusted:
-                    sentencia_procesada = f"{vector_original['Spatial']} {vector_original['Temporal']} {vector_original['Interest']}".replace(' ', '_')
+                    sentencia_procesada = f"{vector_original['spatial']} {vector_original['temporal']} {vector_original['interest']}".replace(' ', '_')
                 else:
-                    sentencia_procesada = f"{vector_original['Spatial']} {vector_original['Temporal']} {vector_original['Interest']} {vector_original['Reference']} {vector_original['Observation']}".replace(' ', '_')
+                    sentencia_procesada = f"{vector_original['spatial']} {vector_original['temporal']} {vector_original['interest']} {vector_original['reference']} {vector_original['observation']}".replace(' ', '_')
                 print(f"Sentencia procesada: {sentencia_procesada}")
             else:
                 print(f"Índice global {idx_global} fuera del rango del CSV original")

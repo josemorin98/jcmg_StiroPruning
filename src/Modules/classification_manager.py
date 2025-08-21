@@ -28,11 +28,14 @@ class ClassificationManager:
             # 'logistic_regression': LogisticRegression(random_state=random_state, max_iter=1000),
             # 'svm': SVC(random_state=random_state, probability=True),
             # 'knn': KNeighborsClassifier(n_neighbors=5)
-            "mlp": MLPClassifier(random_state=random_state, max_iter=100)
+            # "mlp": MLPClassifier(random_state=random_state, max_iter=100)
         }
         self.trained_models = {}
         self.best_model = None
         self.best_score = 0
+        self.labels = None
+        self.embeddings = None
+        self.embeddings_path = None
         
     def _save_time(self, metodo, tiempo, modelos_dir):
         """Guarda el tiempo de ejecución en un CSV."""
@@ -100,7 +103,9 @@ class ClassificationManager:
         #     if labels is None:  # Solo separar si no hemos cargado las etiquetas por separado
         #         labels = embeddings[:, -1]  # Última columna son las etiquetas
         #         embeddings = embeddings[:, :-1]  # Todas las columnas excepto la última
-            
+        self.labels = labels  
+        self.embeddings = embeddings 
+        self.embeddings_path = embeddings_path
         return embeddings, labels
     
     def prepare_classification_data(self, embeddings, labels, remove_noise=True, test_size=0.2):

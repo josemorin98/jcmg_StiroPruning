@@ -44,9 +44,9 @@ echo "=== Iniciando búsqueda de hiperparámetros ==="
 
 # Ejecutar para todos los modelos con los parámetros especificados
 # python find_hyperparams.py --modelo use --max_evals $MAX_EVALS --label_lower $LABEL_LOWER --label_upper $LABEL_UPPER $ADJUSTED_FLAG
-# python find_hyperparams.py --modelo st1 --max_evals $MAX_EVALS --label_lower $LABEL_LOWER --label_upper $LABEL_UPPER $ADJUSTED_FLAG
-python find_hyperparams.py --modelo st2 --max_evals $MAX_EVALS --label_lower $LABEL_LOWER --label_upper $LABEL_UPPER $ADJUSTED_FLAG
-# python find_hyperparams.py --modelo st3 --max_evals $MAX_EVALS --label_lower $LABEL_LOWER --label_upper $LABEL_UPPER $ADJUSTED_FLAG
+python find_hyperparams.py --modelo st1 --max_evals $MAX_EVALS --label_lower $LABEL_LOWER --label_upper $LABEL_UPPER $ADJUSTED_FLAG
+# python find_hyperparams.py --modelo st2 --max_evals $MAX_EVALS --label_lower $LABEL_LOWER --label_upper $LABEL_UPPER $ADJUSTED_FLAG
+python find_hyperparams.py --modelo st3 --max_evals $MAX_EVALS --label_lower $LABEL_LOWER --label_upper $LABEL_UPPER $ADJUSTED_FLAG
 
 echo ""
 echo "=== Clustering completado ==="

@@ -51,7 +51,7 @@ def main():
     print(f"Tiempo de carga del archivo de embeddings: {tiempo_carga:.2f} segundos")
     
     start_time = time.time()
-    clustering = ClusteringManager(random_state=42, model=args.modelo, n_jobs=1)
+    clustering = ClusteringManager(random_state=42, model=args.modelo, n_jobs=-1)
 
     # # Ajustar rangos de hiperparámetros para embeddings con información adicional
     # if args.use_adjusted:
@@ -153,27 +153,19 @@ def main():
         # REALES
         #-------------------------------------------------
         # Parámetros para embeddings ajustados
-        # umap_param_grid = {
-        #     "n_neighbors": np.arange(30, 50, 2),
-        #     "n_components": np.arange(2, 11),
-        #     'min_dist': [0.0, 0.1, 0.25]
-        # }
-        # hdbscan_param_grid = {
-        #     'min_cluster_size': np.arange(100,200,20),
-        #     'min_samples': np.arange(50, 150, 5),
-        # }
+        umap_param_grid = {
+            "n_neighbors": np.arange(30, 50, 2),
+            "n_components": np.arange(2, 4),
+            'min_dist': [0.0, 0.1, 0.25]
+        }
+        hdbscan_param_grid = {
+            'min_cluster_size': np.arange(100,200,20),
+            'min_samples': np.arange(50, 150, 5),
+        }
         #-------------------------------------------------
         # REALES
         #-------------------------------------------------
-        umap_param_grid = {
-            "n_neighbors": [30],
-            "n_components": [2],
-            'min_dist': [0.0, 0.25]
-        }
-        hdbscan_param_grid = {
-            'min_cluster_size': [100],
-            'min_samples': [50,100],
-        }
+    
     else:
         # Parámetros para embeddings originales
         umap_param_grid = {

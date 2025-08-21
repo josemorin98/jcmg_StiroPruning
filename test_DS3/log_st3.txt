@@ -1,0 +1,138 @@
+Usando modelo: st3
+Tipo de parámetros: separate_grid
+Embeddings ajustados: True
+
+=== VECTOR DE ENTRADA ===
+Vector entrada: ['aguascalientes', '2004', 'arsenico_(polvos_respirables_vapores_o_humos)_agua', 989.0, 1]
+Vector en sentencia: aguascalientes 2004 arsenico_(polvos_respirables_vapores_o_humos)_agua
+
+=== GENERACIÓN DE EMBEDDING ===
+Cargando modelo de embeddings: st3
+Creando carpeta de st3
+Guardando embeddings en /home/jmorin/JCMG_Projects/jcmg_StiroPruning/src/Modules/test/st3/st3.npy
+Guardando embeddings en /home/jmorin/JCMG_Projects/jcmg_StiroPruning/src/Modules/test/st3/st3.csv
+Embedding generado con dimensiones: (768,)
+
+=== CLASIFICACIÓN ===
+Cargando datos desde: ../test/Modelos_st3_adjusted
+Cargando embeddings origianles etiquetados desde: ../test/Modelos_st3_adjusted/gridSearch/HDBSCAN/embeddings_labeled_separate_grid.csv
+Embeddings cargados desde con forma (40150, 769)
+Columna etiqueta al final label
+Datos cargados: 40150 muestras, 82 clases únicas
+----- Entrenando clasificadores -----
+Entrenando random_forest...
+random_forest - CV Score: 0.6641 (+/- 0.0663)
+Entrenando mlp...
+mlp - CV Score: 0.3919 (+/- 0.0820)
+
+Mejor modelo: random_forest (Score: 0.6641)
+Tiempo de entrenamiento: 713.39 segundos
+
+=== RESULTADO DE PREDICCIÓN ===
+Mejor modelo: random_forest
+Grupo predicho: -1
+Probabilidad máxima: 0.9300
+Probabilidades por clase:
+ label  probability
+    -1         0.93
+    52         0.02
+    19         0.02
+    59         0.01
+    16         0.01
+    10         0.01
+    48         0.00
+    49         0.00
+    50         0.00
+    51         0.00
+    47         0.00
+    61         0.00
+    53         0.00
+    54         0.00
+    55         0.00
+    56         0.00
+    57         0.00
+    46         0.00
+    58         0.00
+    45         0.00
+    44         0.00
+    60         0.00
+    63         0.00
+    62         0.00
+    72         0.00
+    79         0.00
+    78         0.00
+    77         0.00
+    76         0.00
+    75         0.00
+    74         0.00
+    73         0.00
+    71         0.00
+    42         0.00
+    70         0.00
+    69         0.00
+    68         0.00
+    67         0.00
+    66         0.00
+    65         0.00
+    64         0.00
+    43         0.00
+    40         0.00
+    41         0.00
+     9         0.00
+    18         0.00
+    17         0.00
+    15         0.00
+    14         0.00
+    13         0.00
+    12         0.00
+    11         0.00
+     8         0.00
+    21         0.00
+     7         0.00
+     6         0.00
+     5         0.00
+     4         0.00
+     3         0.00
+     2         0.00
+     1         0.00
+    20         0.00
+    22         0.00
+     0         0.00
+    32         0.00
+    39         0.00
+    38         0.00
+    37         0.00
+    36         0.00
+    35         0.00
+    34         0.00
+    33         0.00
+    31         0.00
+    23         0.00
+    30         0.00
+    29         0.00
+    28         0.00
+    27         0.00
+    26         0.00
+    25         0.00
+    24         0.00
+    80         0.00
+
+=== BÚSQUEDA EN GRUPO -1 ===
+El embedding ya existe en el grupo -1
+Índice relativo en el grupo: 1
+Índice global en el dataset: 1
+
+Vector original encontrado:
+   Spatial: aguascalientes
+   Temporal: 2004
+   Interest: arsenico_(polvos_respirables_vapores_o_humos)_agua
+   Reference: 1
+   Observation: 3427.871301032756
+Sentencia procesada: aguascalientes_2004_arsenico_(polvos_respirables_vapores_o_humos)_agua
+
+=== RESUMEN ===
+Vector de entrada procesado exitosamente
+Modelo de embeddings: st3
+Modelo de clasificación: random_forest
+Grupo predicho: -1
+Confianza: 0.9300
