@@ -1,7 +1,8 @@
 import numpy as np
 import pickle
 from sklearn.metrics.pairwise import cosine_similarity
-from Modules.model_manager import EmbeddingModelManager
+# from Modules.model_manager import EmbeddingModelManager
+from src.Modules.model_manager import EmbeddingModelManager
 import pandas as pd
 
 class PredictVector:

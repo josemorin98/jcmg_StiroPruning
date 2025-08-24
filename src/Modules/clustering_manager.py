@@ -738,7 +738,7 @@ class ClusteringManager:
             estimator=umap_estimator,
             param_grid=umap_space,
             cv=3,
-            n_jobs=self.n_jobs,
+            n_jobs=1,
             verbose=3
         )
         
