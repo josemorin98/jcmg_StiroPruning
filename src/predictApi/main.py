@@ -7,6 +7,7 @@ from src.Modules.classification_manager import ClassificationManager
 import unicodedata
 import os
 import json
+import datetime
 
 app = FastAPI()
 classifier_manager = ClassificationManager(random_state=42)
@@ -59,14 +60,35 @@ def train_classifier(request: TrainRequest):
         # Crear directorio de modelos si no existe
         os.makedirs(f"{request.models_dir}_{request.modelo}{model_suffix}/{model_params}/HDBSCAN", exist_ok=True)
         models_dir = f"{request.models_dir}_{request.modelo}{model_suffix}"
-        embeddings_originales_labeled_path = f"{models_dir}/{model_params}/HDBSCAN/embeddings_labeled_{request.params}.csv"
+        embeddings_originales_labeled_path = os.path.abspath(f"{models_dir}/{model_params}/HDBSCAN/embeddings_labeled_{request.params}.csv")
 
+        
+        # print(f"Ruta de embeddings etiquetados: {embeddings_originales_labeled_path}")
         embeddings_data, labels = classifier_manager.load_data(
             embeddings_path=embeddings_originales_labeled_path
         )
 
         # Entrenar clasificadores
         results = classifier_manager.train_classifiers(embeddings_data, labels, cv_folds=3)
+        # Guardar resultados en formato requerido
+        results_list = []
+        for model_name, metrics in results.items():
+            results_list.append({
+                "embeding_model": request.modelo,
+                "classifier_model": model_name,
+                "r1": metrics["r1"],
+                "accuracy": metrics["accuracy"],
+                "cv_mean": metrics["cv_mean"],
+                "cv_std": metrics["cv_std"],
+                "cv_scores": metrics["cv_scores"]
+            })
+        results_df = pd.DataFrame(results_list)
+        # results_df = pd.DataFrame(results)
+        results_csv_path = os.path.join(models_dir, f"train_results.csv")
+        if os.path.exists(results_csv_path):
+            existing_df = pd.read_csv(results_csv_path)
+            results_df = pd.concat([existing_df, results_df], ignore_index=True)
+        results_df.to_csv(results_csv_path, index=False)
 
         # Predecir grupo para el nuevo vector
 
@@ -108,13 +130,6 @@ def predict(request: PredictRequest):
     # }
     try:
         
-        # Determinar sufijo según si se usan embeddings ajustados
-        # model_suffix = "_adjusted" if request.use_adjusted else ""
-        # params_suffix = f"_{request.params}"
-        # model_params = request.params
-        # if request.params == "separate_grid":
-        #     model_params = "gridSearch"
-
         # Preparar vector de entrada
         vector_input = request.vector_input
         if request.use_adjusted:
@@ -186,6 +201,7 @@ def predict(request: PredictRequest):
                 if existe and idx_global is not None:
                     vector_original = df_embeddings.iloc[int(idx_global)].to_dict()
                     response["vector_original"] = vector_original
+
             except Exception as e:
                 response["vector_original_error"] = str(e)
         else:
@@ -227,6 +243,39 @@ def predict(request: PredictRequest):
                                 "error": f"Índice global {glob_idx} fuera del rango del CSV original"
                             })
                     response["top_10"] = top_10
+                    # Guardar similitudes en un CSV por consulta
+
+                    # Definir nombre base del archivo
+                    csv_base = "similitudes_consulta"
+                    csv_dir = "./"
+                    consulta_num = 1
+
+                    # Buscar un nombre de archivo que no exista aún
+                    while os.path.exists(os.path.join(csv_dir, f"{csv_base}_{consulta_num}.csv")):
+                        consulta_num += 1
+
+                    csv_path = os.path.join(csv_dir, f"{csv_base}_{consulta_num}.csv")
+
+                    # Preparar los datos para guardar
+                    rows = []
+                    for item in top_10:
+                        row = {
+                            "similitud_coseno": item.get("similitud"),
+                            "indice_relativo": item.get("indice_relativo"),
+                            "indice_global": item.get("indice_global"),
+                            "spatial": item["vector_original"].get("spatial") if "vector_original" in item else None,
+                            "temporal": item["vector_original"].get("temporal") if "vector_original" in item else None,
+                            "interest": item["vector_original"].get("interest") if "vector_original" in item else None,
+                            "reference": item["vector_original"].get("reference") if "vector_original" in item else None,
+                            "observation": item["vector_original"].get("observation") if "vector_original" in item else None,
+                            "sentencia_procesada": item.get("sentencia_procesada"),
+                            "timestamp": datetime.datetime.now().isoformat()
+                        }
+                        rows.append(row)
+
+                    df_similitudes = pd.DataFrame(rows)
+                    df_similitudes.to_csv(csv_path, index=False)
+                    response["similitudes_csv"] = csv_path
                 except Exception as e:
                     response["top_10_error"] = str(e)
                 except FileNotFoundError:
