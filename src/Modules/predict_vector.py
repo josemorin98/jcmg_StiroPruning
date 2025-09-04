@@ -172,12 +172,15 @@ class PredictVector:
         embeddings_group_valores = embeddings_group.drop(columns=['label']).values
         
         # Buscar si el embedding existe en el grupo
+        print("Buscando en grupo...")
         for idx_relativo, emb_row in enumerate(embeddings_group_valores):
             if np.allclose(embedding_query, emb_row, atol=atol):
-                idx_global = indices_globales[idx_relativo]
-                return True, idx_relativo, idx_global, embeddings_group
-        
-        return False, None, None, None
+                print("Encontrado")
+                idx_global = int(indices_globales[idx_relativo])
+                return True, idx_relativo, idx_global
+
+        print("Terminó")
+        return False, None, None
 
     def buscar_similares_en_grupo_por_etiqueta(self, embedding, embeddings_labeled_path, grupo_id, top_n=10):
         """
