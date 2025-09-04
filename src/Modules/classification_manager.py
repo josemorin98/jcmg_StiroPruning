@@ -26,9 +26,9 @@ class ClassificationManager:
         """
         self.random_state = random_state
         self.classifiers = {
-            'random_forest': RandomForestClassifier(random_state=random_state, n_estimators=100),
+            # 'random_forest': RandomForestClassifier(random_state=random_state, n_estimators=100),
             # 'logistic_regression': LogisticRegression(random_state=random_state, max_iter=1000),
-            'svm': SVC(random_state=random_state, probability=True),
+            # 'svm': SVC(random_state=random_state, probability=True),
             # 'knn': KNeighborsClassifier(n_neighbors=5),
             # "xgboost": XGBClassifier(random_state=random_state, use_label_encoder=False, eval_metric='mlogloss'),
             "mlp": MLPClassifier(random_state=random_state, max_iter=100)
@@ -165,46 +165,48 @@ class ClassificationManager:
             print(f"Entrenando {name}...")
             # y_train = np.where(y_train == -1, 999, y_train)
             # Validación cruzada
-            cv_scores = cross_val_score(classifier, X_train, y_train, cv=cv_folds)
+            # cv_scores = cross_val_score(classifier, X_train, y_train, cv=cv_folds)
+
             
             # Entrenar en todos los datos de entrenamiento
             classifier.fit(X_train, y_train)
             self.trained_models[name] = classifier
             
             # Guardar resultados
-            results[name] = {
-                'cv_mean': cv_scores.mean(),
-                'cv_std': cv_scores.std(),
-                'cv_scores': cv_scores
-            }
+            # results[name] = {
+            #     'cv_mean': cv_scores.mean(),
+            #     'cv_std': cv_scores.std(),
+            #     'cv_scores': cv_scores
+            # }
             
-            print(f"{name} - CV Score: {cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
+            # print(f"{name} - CV Score: {cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
             
             # Actualizar mejor modelo
-            if cv_scores.mean() > self.best_score:
-                self.best_score = cv_scores.mean()
-                self.best_model = name
+            # if cv_scores.mean() > self.best_score:
+            #     self.best_score = cv_scores.mean()
+            #     self.best_model = name
+            self.best_model = name
             # Guardar resultados en CSV
-            results_df = pd.DataFrame([{
-                'modelo': name,
-                'cv_mean': cv_scores.mean(),
-                'cv_std': cv_scores.std(),
-                'cv_scores': cv_scores.tolist()
-            }])
-            csv_path = os.path.join("model_results.csv")
-            if os.path.exists(csv_path):
-                prev_df = pd.read_csv(csv_path)
-                results_df = pd.concat([prev_df, results_df], ignore_index=True)
-            results_df.to_csv(csv_path, index=False)
+            # results_df = pd.DataFrame([{
+            #     'modelo': name,
+            #     'cv_mean': cv_scores.mean(),
+            #     'cv_std': cv_scores.std(),
+            #     'cv_scores': cv_scores.tolist()
+            # }])
+            # csv_path = os.path.join("model_results.csv")
+            # if os.path.exists(csv_path):
+            #     prev_df = pd.read_csv(csv_path)
+            #     results_df = pd.concat([prev_df, results_df], ignore_index=True)
+            # # results_df.to_csv(csv_path, index=False)
 
             # Calcular R1 (macro recall)
-            y_pred = classifier.predict(X_train)
-            r1 = recall_score(y_train, y_pred, average='macro')
-            results[name]['r1'] = r1
-            print(f"{name} - R1: {r1:.4f}")
+            # y_pred = classifier.predict(X_train)
+            # r1 = recall_score(y_train, y_pred, average='macro')
+            # results[name]['r1'] = r1
+            # print(f"{name} - R1: {r1:.4f}")
 
-            accuracy = accuracy_score(y_train, y_pred)
-            results[name]['accuracy'] = accuracy
+            # accuracy = accuracy_score(y_train, y_pred)
+            # results[name]['accuracy'] = accuracy
         print(f"\nMejor modelo: {self.best_model} (Score: {self.best_score:.4f})")
         
         tiempo = time.time() - start_time
