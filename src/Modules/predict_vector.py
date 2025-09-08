@@ -179,7 +179,7 @@ class PredictVector:
                 idx_global = int(indices_globales[idx_relativo])
                 return True, idx_relativo, idx_global
 
-        print("Terminó")
+        print("No encontrado")
         return False, None, None
 
     def buscar_similares_en_grupo_por_etiqueta(self, embedding, embeddings_labeled_path, grupo_id, top_n=10):
@@ -228,6 +228,7 @@ class PredictVector:
         # Extraer solo las columnas de embeddings (sin la columna 'label')
         embeddings_group_valores = embeddings_group.drop(columns=['label']).values
         
+        print(f"Buscando similares en grupo {grupo_id} con {len(embeddings_group_valores)} embeddings...")
         # Calcular similitudes coseno
         similarities = cosine_similarity([embedding], embeddings_group_valores)[0]
         
