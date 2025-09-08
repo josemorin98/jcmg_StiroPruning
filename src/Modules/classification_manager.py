@@ -26,9 +26,9 @@ class ClassificationManager:
         """
         self.random_state = random_state
         self.classifiers = {
-            # 'random_forest': RandomForestClassifier(random_state=random_state, n_estimators=100),
+            'random_forest': RandomForestClassifier(random_state=random_state, n_estimators=100),
             # 'logistic_regression': LogisticRegression(random_state=random_state, max_iter=1000),
-            # 'svm': SVC(random_state=random_state, probability=True),
+            'svm': SVC(random_state=random_state, probability=True),
             # 'knn': KNeighborsClassifier(n_neighbors=5),
             # "xgboost": XGBClassifier(random_state=random_state, use_label_encoder=False, eval_metric='mlogloss'),
             "mlp": MLPClassifier(random_state=random_state, max_iter=100)
@@ -54,7 +54,7 @@ class ClassificationManager:
             df = pd.concat([df_ant, df], ignore_index=True)
         df.to_csv(csv_path, index=False)
     
-    def load_data(self, embeddings_path):
+    def load_data(self, embeddings_path: str):
         """
         Carga los embeddings y las etiquetas de clustering.
         
@@ -238,6 +238,27 @@ class ClassificationManager:
             
         return predictions, probabilities
     
+    def predict_query(self, model, new_embeddings):
+        """
+        Predice las etiquetas para nuevos datos usando un modelo entrenado.
+        
+        Parámetros:
+            model_name (Model Class): Nombre del modelo a usar.
+            new_embeddings (np.ndarray): Nuevos embeddings para clasificar.
+            
+        Retorna:
+            predictions (np.ndarray): Predicciones del modelo.
+            probabilities (np.ndarray): Probabilidades de cada clase (si disponible).
+        """
+        
+        predictions = model.predict(new_embeddings)
+        
+        probabilities = None
+        if hasattr(model, 'predict_proba'):
+            probabilities = model.predict_proba(new_embeddings)
+            
+        return predictions, probabilities
+    
     def evaluate_model(self, model_name, X_test, y_test):
         """
         Evalúa un modelo entrenado en el conjunto de prueba.
@@ -304,7 +325,7 @@ class ClassificationManager:
             pickle.dump(best_info, f)
         print(f"Información de clasificación guardada en {info_path}")
     
-    def load_model(self, model_path):
+    def load_model(self, model_path:str):
         """
         Carga un modelo de clasificación guardado.
         
