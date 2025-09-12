@@ -141,7 +141,7 @@ def limpiar_texto(texto):
     texto = texto.replace(',', '')
     return texto
 
-def save_prediction_log(query_string: str, predicted_label: int, confidence: float, predict: str, csv_path: str = "./prediction_log.csv"):
+def save_prediction_log(query_string: str, predicted_label: int, confidence: float, predict: str, modelo: str, clasificador: str, use_adjusted: bool, csv_path: str = "./prediction_log.csv"):
     """
     Guarda el log de predicciones en un CSV con contador automático
     """
@@ -152,7 +152,10 @@ def save_prediction_log(query_string: str, predicted_label: int, confidence: flo
             "query_original": query_string,
             "grupo_predicho": predicted_label,
             "confianza": confidence,
-            "prediccion": predict
+            "prediccion": predict,
+            "modelo": modelo,
+            "clasificador": clasificador,
+            "use_adjusted": use_adjusted
         }
         
         # Verificar si el archivo existe
@@ -213,6 +216,7 @@ def predict(request: PredictRequest):
     #     ]
     # }
     try:
+        start_time = datetime.time.time()
         model_suffix = "_adjusted" if request.use_adjusted == True else  ""
         # Preparar vector de entrada
         vector_input = request.vector_input
@@ -224,8 +228,8 @@ def predict(request: PredictRequest):
             observable = vector_input[4]
             vector_input = [spatial, temporal, interest]
         
-        # query_string = limpiar_texto(vector_input)
-        query_string = ' '.join([str(x).replace(' ', '_') for x in vector_input])
+        query_string = limpiar_texto(vector_input)
+        # query_string = ' '.join([str(x).replace(' ', '_') for x in vector_input])
         print(f"Vector de entrada procesado: {query_string}")
         # Selección del modelo de embeddings
         modelos_dict = {
@@ -328,13 +332,9 @@ def predict(request: PredictRequest):
             grupo_id=predicted_label
         )
         
-        # Llamar a la función para guardar el log
-        prediction_counter = save_prediction_log(
-            query_string=query_string,
-            predicted_label=predicted_label,
-            confidence=response.get('confianza', 0.0),
-            predict=existe
-        )
+        
+        
+        
         print(f"¿Existe en el grupo {predicted_label}? {existe}")
         response["existe_en_grupo"] = existe
         if existe:
@@ -397,14 +397,15 @@ def predict(request: PredictRequest):
                     # Guardar similitudes en un CSV por consulta
 
                     # Definir nombre base del archivo
-                    csv_base = "similitudes_consulta"
-                    csv_dir = "./"
+                    csv_base = f"similitudes_consulta_{request.modelo}_{request.classifier_model}{model_suffix}"
+                    csv_dir = f"./similitudes/{request.modelo}_{request.classifier_model}{model_suffix}"
                     consulta_num = 1
 
                     # Buscar un nombre de archivo que no exista aún
                     while os.path.exists(os.path.join(csv_dir, f"{csv_base}_{consulta_num}.csv")):
                         consulta_num += 1
-
+                    # Crear directorio si no existe
+                    os.makedirs(csv_dir, exist_ok=True)
                     csv_path = os.path.join(csv_dir, f"{csv_base}_{consulta_num}.csv")
                     print(f"Guardando similitudes en: {csv_path}")
                     # Preparar los datos para guardar
@@ -433,7 +434,26 @@ def predict(request: PredictRequest):
                     response["top_10_error"] = "No se pudo cargar el CSV original '../data/sample.csv'"
                 except Exception as e:
                     response["top_10_error"] = f"Error al cargar CSV original: {str(e)}"
-        return True
+        # Llamar a la función para guardar el log
+        prediction_counter = save_prediction_log(
+            query_string=query_string,
+            predicted_label=predicted_label,
+            confidence=response.get('confianza', 0.0),
+            predict=existe,
+            modelo=request.modelo,
+            clasificador=request.classifier_model,
+            use_adjusted=bool(request.use_adjusted),
+            csv_path="./prediction_DS3_log.csv",
+            start_time=start_time,
+            end_time=datetime.time.time(),
+            porcentaje_reduccion=porcentaje_reduccion
+        )
+        # Colocar el tamaño de registros de grupos en la respuesta
+        # y el porcentaje de reduccion
+        # añadir tiempo de consulta
+        )
+        
+        return existe
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
