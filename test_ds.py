@@ -2,6 +2,9 @@ import requests
 from pydantic import BaseModel
 from typing import Optional
 import pandas as pd
+import time
+# Mezclar aleatoriamente la columna 'interest' de un CSV
+import random
 
 
 class TrainRequest(BaseModel):
@@ -62,31 +65,33 @@ if __name__ == "__main__":
     #     "params": "separate_grid",
     #     "models_dir": "./test_DS1/Modelos",
     #     "ds_originales_path": "./data/sample.csv",
-    #     "modelo_name": "mlp",
+    #     "name": "mlp",
     #     "use_adjusted": "True",
     #     "embeddings_path": "./testDS1"
     # }
     for m_e in model_embedding:
-        custom_request = TrainRequest(
+        for c_m in class_model:
+            custom_request = TrainRequest(
                     modelo=m_e,
                     params="separate_grid",
                     models_dir="./test_DS3/Modelos",
                     ds_originales_path="./data/sample_ds3.csv",
-                    modelo_name="mlp",
+                    name_modelo=c_m,
                     use_adjusted=True,
                     embeddings_path="./testDS3"
                 )
 
         # Enviar petición
-        result = send_train_request(api_url, custom_request)
+            result = send_train_request(api_url, custom_request)
         # result = "--- IGNORE ---"
-        if result:
-            print("Respuesta del servidor:", result)
-        else:
-            print("Error al procesar la petición")
+            if result:
+                print("Respuesta del servidor:", result)
+            else:
+                print("Error al procesar la petición")
             
+    # exit(0)
     # Leer el archivo CSV
-    df = pd.read_csv("exact_test_DS3.csv")
+    df = pd.read_csv("no_exact_test_DS3.csv")
 
     print(df.head())
     
@@ -105,16 +110,19 @@ if __name__ == "__main__":
     api_url = "http://localhost:8000/predict"  # Cambia por tu URL
     for m_e in model_embedding:
         for index, row in df.iterrows():
-            custom_request = PredictRequest(
+            for c_m in class_model:
+                custom_request = PredictRequest(
                     modelo=m_e,
-                    classifier_model="mlp",
+                    classifier_model=c_m,
                     use_adjusted=True,
                     vector_input=[str(x) for x in row.tolist()]
                 )
-            # Enviar petición
-            result = send_train_request(api_url, custom_request)
-            # result = "--- IGNORE ---"
-            if result:
-                print("Respuesta del servidor:", result, "para el input:", custom_request.vector_input)
-            else:
-                print("Error al procesar la petición")
+                # Enviar petición
+                print("id=", index," model =", m_e, "classifier =", c_m)
+                result = send_train_request(api_url, custom_request)
+                # result = "--- IGNORE ---"
+                if result:
+                    print("Respuesta del servidor:", result, "para el input:", custom_request.vector_input)
+                else:
+                    print("Error al procesar la petición")
+                    # time.sleep(5)

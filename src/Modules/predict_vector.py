@@ -177,10 +177,10 @@ class PredictVector:
             if np.allclose(embedding_query, emb_row, atol=atol):
                 print("Encontrado")
                 idx_global = int(indices_globales[idx_relativo])
-                return True, idx_relativo, idx_global
+                return True, idx_relativo, idx_global, embeddings_group.shape[0]
 
         print("No encontrado")
-        return False, None, None
+        return False, None, None, 0
 
     def buscar_similares_en_grupo_por_etiqueta(self, embedding, embeddings_labeled_path, grupo_id, top_n=10):
         """

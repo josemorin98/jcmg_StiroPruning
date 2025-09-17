@@ -7,13 +7,14 @@ from src.Modules.classification_manager import ClassificationManager
 import unicodedata
 import os
 import json
+import time
 import datetime
 
 app = FastAPI()
 classifier_manager = ClassificationManager(random_state=42)
 dataset_originales_path = "./data/sample.csv"
 
-
+DS = "DS3"
     
 class TrainRequest(BaseModel):
     modelo: str = "st1"
@@ -98,6 +99,7 @@ def load_classifier(request: TrainRequest):
         
         # Crear directorio de modelos si no existe
         model_name = request.name_modelo
+        print("--------------------------------", model_name)
         model_dir = os.path.join(request.models_dir + model_suffix, request.modelo, f"classifier_{model_name}{model_suffix}.pkl")
         print(model_dir)
         # print(f"Ruta de embeddings etiquetados: {embeddings_originales_labeled_path}")
@@ -141,7 +143,7 @@ def limpiar_texto(texto):
     texto = texto.replace(',', '')
     return texto
 
-def save_prediction_log(query_string: str, predicted_label: int, confidence: float, predict: str, modelo: str, clasificador: str, use_adjusted: bool, csv_path: str = "./prediction_log.csv"):
+def save_prediction_log(query_string: str, predicted_label: int, confidence: float, predict: str, modelo: str, clasificador: str, use_adjusted: bool, start_time: float, end_time: float, cant_group: int, total_embeddings: int, csv_path: str = "./prediction_log.csv"):
     """
     Guarda el log de predicciones en un CSV con contador automático
     """
@@ -155,9 +157,14 @@ def save_prediction_log(query_string: str, predicted_label: int, confidence: flo
             "prediccion": predict,
             "modelo": modelo,
             "clasificador": clasificador,
-            "use_adjusted": use_adjusted
+            "use_adjusted": use_adjusted,
+            "start_time": start_time,
+            "end_time": end_time,
+            "tiempo_consulta_segundos": round(end_time - start_time, 2),
+            "cant_group": cant_group,
+            "total_embeddings": total_embeddings
         }
-        
+
         # Verificar si el archivo existe
         if os.path.exists(csv_path):
             # Cargar el CSV existente
@@ -199,7 +206,68 @@ class PredictRequest(BaseModel):
     classifier_model: str = "mlp"
     use_adjusted: bool = False
     vector_input: list
+
+# Estructura para manejar modelos de sentence transformer cargados
+loaded_sentence_transformers = {}
+
+def load_sentence_transformer_model(model_name: str, model_type: str, model_path: str):
+    """Carga un modelo de sentence transformer y lo mantiene en memoria"""
+    try:
+        if model_name not in loaded_sentence_transformers:
+            print(f"Cargando modelo de sentence transformer: {model_name}")
+            predictor = PredictVector(model_name, model_type, model_path)
+            loaded_sentence_transformers[model_name] = predictor
+            print(f"Modelo {model_name} cargado exitosamente en memoria")
+        else:
+            print(f"Modelo {model_name} ya está cargado en memoria")
+        return loaded_sentence_transformers[model_name]
+    except Exception as e:
+        print(f"Error al cargar modelo {model_name}: {str(e)}")
+        raise e
+
+def get_sentence_transformer_model(model_name: str):
+    """Obtiene un modelo de sentence transformer de la memoria"""
+    if model_name in loaded_sentence_transformers:
+        return loaded_sentence_transformers[model_name]
+    else:
+        # Si no está cargado, cargarlo automáticamente
+        modelos_dict = {
+            "st1": ("st1", "sentence_transformer", "all-mpnet-base-v2"),
+            "st2": ("st2", "sentence_transformer", "all-MiniLM-L6-v2"),
+            "st3": ("st3", "sentence_transformer", "paraphrase-mpnet-base-v2")
+        }
+            
+        if model_name in modelos_dict:
+            nombre, tipo, ruta = modelos_dict[model_name]
+            return load_sentence_transformer_model(nombre, tipo, ruta)
+        else:
+            raise ValueError(f"Modelo no reconocido: {model_name}")
+
+@app.on_event("startup")
+def startup_event():
+    """Carga automáticamente todos los modelos de sentence transformer al iniciar la aplicación"""
+    modelos_dict = {
+        "st1": ("st1", "sentence_transformer", "all-mpnet-base-v2"),
+        "st2": ("st2", "sentence_transformer", "all-MiniLM-L6-v2"),
+        "st3": ("st3", "sentence_transformer", "paraphrase-mpnet-base-v2")
+    }
     
+    print("Cargando modelos de sentence transformer automáticamente...")
+    for model_key, (nombre, tipo, ruta) in modelos_dict.items():
+        try:
+            load_sentence_transformer_model(nombre, tipo, ruta)
+            print(f"✓ Modelo {model_key} cargado exitosamente")
+        except Exception as e:
+            print(f"✗ Error cargando modelo {model_key}: {str(e)}")
+
+@app.get("/listSentenceTransformers")
+def list_sentence_transformers():
+    """Lista los modelos de sentence transformer cargados en memoria"""
+    return {
+            "total_models": len(loaded_sentence_transformers),
+            "loaded_models": list(loaded_sentence_transformers.keys())
+        }
+  
 @app.post("/predict")
 def predict(request: PredictRequest):
     # Ejemplo de JSON de entrada para /predict:
@@ -216,7 +284,7 @@ def predict(request: PredictRequest):
     #     ]
     # }
     try:
-        start_time = datetime.time.time()
+        start_time = time.time()
         model_suffix = "_adjusted" if request.use_adjusted == True else  ""
         # Preparar vector de entrada
         vector_input = request.vector_input
@@ -228,20 +296,17 @@ def predict(request: PredictRequest):
             observable = vector_input[4]
             vector_input = [spatial, temporal, interest]
         
-        query_string = limpiar_texto(vector_input)
-        # query_string = ' '.join([str(x).replace(' ', '_') for x in vector_input])
+        # query_string = limpiar_texto(vector_input)
+        query_string = ' '.join([str(x).replace(' ', '_') for x in vector_input])
         print(f"Vector de entrada procesado: {query_string}")
         # Selección del modelo de embeddings
-        modelos_dict = {
-            "use": ("use", "use", "https://tfhub.dev/google/universal-sentence-encoder/4"),
-            "st1": ("st1", "sentence_transformer", "all-mpnet-base-v2"),
-            "st2": ("st2", "sentence_transformer", "all-MiniLM-L6-v2"),
-            "st3": ("st3", "sentence_transformer", "paraphrase-mpnet-base-v2")
-        }
-        nombre, tipo, ruta = modelos_dict[request.modelo]
-        print(f"Modelo seleccionado: {nombre}, Tipo: {tipo}, Ruta: {ruta}")
-
-        predictor = PredictVector(nombre, tipo, ruta)
+        # modelos_dict = {
+        #     "st1": ("st1", "sentence_transformer", "all-mpnet-base-v2"),
+        #     "st2": ("st2", "sentence_transformer", "all-MiniLM-L6-v2"),
+        #     "st3": ("st3", "sentence_transformer", "paraphrase-mpnet-base-v2")
+        # }
+        predictor = loaded_sentence_transformers[request.modelo]
+        print(f"Modelo seleccionado: {request.modelo}")
 
         # Generar embedding
         embedding = predictor.generar_embedding(query_string)
@@ -276,7 +341,7 @@ def predict(request: PredictRequest):
             
             # Definir nombre del archivo CSV para embeddings
             embedding_csv_dir = "./"
-            embedding_csv_path = os.path.join(embedding_csv_dir, "embedding_generado.csv")
+            embedding_csv_path = os.path.join(embedding_csv_dir, f"embedding_generado_{DS}.csv")
             
             # Si el archivo existe, cargar y agregar; si no, crear nuevo
             if os.path.exists(embedding_csv_path):
@@ -296,7 +361,7 @@ def predict(request: PredictRequest):
         
         response = {
             "grupo_predicho": int(predicted_label) if predicted_label is not False else False,
-            "modelo": nombre,
+            "modelo": request.modelo,
             "clasificador": str(request.classifier_model),
         }
         print("Respuesta generada:\n" + json.dumps(response, indent=4, ensure_ascii=False))
@@ -326,7 +391,7 @@ def predict(request: PredictRequest):
         
         
         # Verificar si el embedding ya existe exactamente en el grupo
-        existe, idx_relativo, idx_global = predictor.existe_en_grupo_por_etiqueta(
+        existe, idx_relativo, idx_global, size_group = predictor.existe_en_grupo_por_etiqueta(
             embedding_query=embedding, 
             embeddings_path=path_embeddings_labeled,
             grupo_id=predicted_label
@@ -434,7 +499,11 @@ def predict(request: PredictRequest):
                     response["top_10_error"] = "No se pudo cargar el CSV original '../data/sample.csv'"
                 except Exception as e:
                     response["top_10_error"] = f"Error al cargar CSV original: {str(e)}"
+        
+        
+        
         # Llamar a la función para guardar el log
+        porcentaje_reduccion = size_group / len(labels) * 100 if size_group > 0 else 0
         prediction_counter = save_prediction_log(
             query_string=query_string,
             predicted_label=predicted_label,
@@ -443,17 +512,17 @@ def predict(request: PredictRequest):
             modelo=request.modelo,
             clasificador=request.classifier_model,
             use_adjusted=bool(request.use_adjusted),
-            csv_path="./prediction_DS3_log.csv",
+            csv_path=f"./prediction_{DS}_log.csv",
             start_time=start_time,
-            end_time=datetime.time.time(),
-            porcentaje_reduccion=porcentaje_reduccion
-        )
-        # Colocar el tamaño de registros de grupos en la respuesta
-        # y el porcentaje de reduccion
-        # añadir tiempo de consulta
+            end_time=time.time(),
+            cant_group=size_group,
+            total_embeddings=len(labels)
         )
         
         return existe
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+    
+    
