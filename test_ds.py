@@ -69,16 +69,18 @@ if __name__ == "__main__":
     #     "use_adjusted": "True",
     #     "embeddings_path": "./testDS1"
     # }
+    
+    DS = "DS2"
     for m_e in model_embedding:
         for c_m in class_model:
             custom_request = TrainRequest(
                     modelo=m_e,
                     params="separate_grid",
-                    models_dir="./test_DS3/Modelos",
-                    ds_originales_path="./data/sample_ds3.csv",
+                    models_dir=f"./test_{DS}/Modelos",
+                    ds_originales_path=f"./data/sample_{DS.lower()}.csv",
                     name_modelo=c_m,
                     use_adjusted=True,
-                    embeddings_path="./testDS3"
+                    embeddings_path=f"./test{DS}"
                 )
 
         # Enviar petición
@@ -91,7 +93,8 @@ if __name__ == "__main__":
             
     # exit(0)
     # Leer el archivo CSV
-    df = pd.read_csv("no_exact_test_DS3.csv")
+    # exit(0)
+    df = pd.read_csv(f"no_exact_test_{DS}.csv")
 
     print(df.head())
     
@@ -107,7 +110,7 @@ if __name__ == "__main__":
     #       "-"
     #   ]
     # }
-    api_url = "http://localhost:8000/predict"  # Cambia por tu URL
+    api_url = "http://localhost:8000/predict/all"  # Cambia por tu URL
     for m_e in model_embedding:
         for index, row in df.iterrows():
             for c_m in class_model:
